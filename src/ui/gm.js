@@ -1,0 +1,15 @@
+// General MIDI instruments (program 0–127). GM arranges them in 16 families of eight; each family gets an
+// icon and a Chinese name so the list can be scanned by eye instead of read line by line.
+export const GM_INSTRUMENTS = ['Acoustic Grand Piano','Bright Acoustic Piano','Electric Grand Piano','Honky-tonk Piano','Electric Piano 1','Electric Piano 2','Harpsichord','Clavinet','Celesta','Glockenspiel','Music Box','Vibraphone','Marimba','Xylophone','Tubular Bells','Dulcimer','Drawbar Organ','Percussive Organ','Rock Organ','Church Organ','Reed Organ','Accordion','Harmonica','Tango Accordion','Acoustic Guitar (nylon)','Acoustic Guitar (steel)','Electric Guitar (jazz)','Electric Guitar (clean)','Electric Guitar (muted)','Overdriven Guitar','Distortion Guitar','Guitar Harmonics','Acoustic Bass','Electric Bass (finger)','Electric Bass (pick)','Fretless Bass','Slap Bass 1','Slap Bass 2','Synth Bass 1','Synth Bass 2','Violin','Viola','Cello','Contrabass','Tremolo Strings','Pizzicato Strings','Orchestral Harp','Timpani','String Ensemble 1','String Ensemble 2','Synth Strings 1','Synth Strings 2','Choir Aahs','Voice Oohs','Synth Voice','Orchestra Hit','Trumpet','Trombone','Tuba','Muted Trumpet','French Horn','Brass Section','Synth Brass 1','Synth Brass 2','Soprano Sax','Alto Sax','Tenor Sax','Baritone Sax','Oboe','English Horn','Bassoon','Clarinet','Piccolo','Flute','Recorder','Pan Flute','Blown Bottle','Shakuhachi','Whistle','Ocarina','Lead 1 (square)','Lead 2 (sawtooth)','Lead 3 (calliope)','Lead 4 (chiff)','Lead 5 (charang)','Lead 6 (voice)','Lead 7 (fifths)','Lead 8 (bass + lead)','Pad 1 (new age)','Pad 2 (warm)','Pad 3 (polysynth)','Pad 4 (choir)','Pad 5 (bowed)','Pad 6 (metallic)','Pad 7 (halo)','Pad 8 (sweep)','FX 1 (rain)','FX 2 (soundtrack)','FX 3 (crystal)','FX 4 (atmosphere)','FX 5 (brightness)','FX 6 (goblins)','FX 7 (echoes)','FX 8 (sci-fi)','Sitar','Banjo','Shamisen','Koto','Kalimba','Bagpipe','Fiddle','Shanai','Tinkle Bell','Agogo','Steel Drums','Woodblock','Taiko Drum','Melodic Tom','Synth Drum','Reverse Cymbal','Guitar Fret Noise','Breath Noise','Seashore','Bird Tweet','Telephone Ring','Helicopter','Applause','Gunshot'];
+
+export const GM_FAMILIES = [
+  ['🎹', '鋼琴'], ['🔔', '鐘琴・木琴'], ['🎛️', '風琴・手風琴'], ['🎸', '吉他'], ['🎸', '貝斯'], ['🎻', '弦樂'], ['🎻', '弦樂合奏・人聲'], ['🎺', '銅管'],
+  ['🎷', '薩克斯風・簧片'], ['🪈', '長笛・笛類'], ['🎚️', '合成主音'], ['🎚️', '合成鋪底'], ['✨', '合成音效'], ['🪕', '民族樂器'], ['🥁', '打擊'], ['🔊', '音效']
+];
+/** A few programs deserve a more specific picture than their family's. */
+const ICON_OVERRIDES = { 22: '🎵', 47: '🥁', 52: '🎤', 53: '🎤', 54: '🎤', 105: '🪕', 109: '🎵', 110: '🎻' };
+export const instrumentIcon = program => ICON_OVERRIDES[program] ?? GM_FAMILIES[program >> 3]?.[0] ?? '🎵';
+export const familyOf = program => GM_FAMILIES[program >> 3];
+
+/** Programs a guitarist reaches for most, listed first in the picker. */
+export const GUITAR_PROGRAMS = [[24,'古典吉他（尼龍弦）'],[25,'木吉他（鋼弦）'],[26,'電吉他（Jazz）'],[27,'電吉他（Clean）'],[28,'電吉他（悶音）'],[29,'電吉他（Overdrive）'],[30,'電吉他（Distortion）'],[32,'木貝斯'],[33,'電貝斯（指彈）'],[34,'電貝斯（Pick）'],[36,'Slap 貝斯']];

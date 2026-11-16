@@ -1,0 +1,8 @@
+node_modules/
+dist/
+public/font/
+public/soundfont/
+.DS_Store
+takes/
+public/basic-pitch/
+.claude/

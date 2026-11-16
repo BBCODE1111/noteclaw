@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NoteClaw — TAB Editor</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.88em' font-size='88'%3E%F0%9F%8E%B8%3C/text%3E%3C/svg%3E"/>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark"><img src="brand/logo.svg" alt="" onerror="this.remove()"/>N</span><span class="brand-name">NoteClaw</span><span class="ver">v0.4</span></div>
+    <nav class="tabs" aria-label="工作模式">
+      <button class="active" data-view="score">六線譜</button>
+      <button data-view="live">彈奏記譜<em>Beta</em></button>
+      <button data-view="compose">AI 貼譜</button>
+    </nav>
+    <div class="song">
+      <span id="fileLabel" class="song-file">NEW PROJECT</span>
+      <strong id="pageTitle" class="song-title">First Lick</strong>
+      <span id="subTitle" class="song-sub">標準調弦</span>
+    </div>
+    <div class="top-actions">
+      <span id="status" class="status">正在初始化...</span>
+      <button id="newBtn" class="btn">新譜</button>
+      <button id="openBtn" class="btn">開啟</button>
+      <button id="saveBtn" class="btn primary">儲存 .gp</button>
+      <button id="helpBtn" class="btn round" title="使用方式">?</button>
+      <input id="fileInput" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx,.xml,.musicxml,.mxl,.mid,.midi,.txt,.alphatex,.noteclaw,.gstudio" hidden/>
+    </div>
+  </header>
+
+  <main class="body">
+    <aside class="inspector">
+      <section class="card">
+        <h3>曲目</h3>
+        <label class="field">歌曲名稱<input id="titleInput" value="First Lick"/></label>
+        <label class="field">演奏者<input id="artistInput" placeholder="選填"/></label>
+        <div class="field-row">
+          <label class="field">速度 ♩=<input id="bpmInput" type="number" min="20" max="400" value="110"/></label>
+          <label class="field">拍號<span class="ts"><input id="tsNum" type="number" min="1" max="32" value="4" aria-label="每小節幾拍"/><i>/</i><select id="tsDen" aria-label="以幾分音符為一拍"><option>2</option><option selected>4</option><option>8</option><option>16</option></select></span></label>
+        </div>
+        <label class="field">調性<select id="keySelect"></select></label>
+        <p class="hint">調性和拍號從游標所在的小節開始套用，到下一個變更為止。</p>
+      </section>
+      <section class="card">
+        <h3>軌道</h3>
+        <div id="trackList" class="track-list"></div>
+        <label class="field">音色<select id="programSelect"></select></label>
+        <label class="field">音量<input id="trackVolume" type="range" min="0" max="16" step="1" value="12"/></label>
+        <div class="btn-row"><button id="addGuitarBtn" class="btn">＋吉他</button><button id="addBassBtn" class="btn">＋貝斯</button><button id="addDrumBtn" class="btn">＋鼓組</button><button id="deleteTrackBtn" class="btn danger" title="刪除目前編輯的軌道">刪除</button></div>
+        <p class="hint">點軌道名稱切換編輯對象。鼓組軌用數字鍵 1–0 打鼓點。「顯」同時顯示多軌，S 獨奏，M 靜音。</p>
+      </section>
+      <section class="card">
+        <h3>檔案</h3>
+        <button id="projectBtn" class="btn wide" title="NoteClaw 專案檔（.noteclaw），完整保留所有內容">儲存專案檔（無損）</button>
+        <div class="btn-row"><button id="pdfBtn" class="btn" title="A4 PDF">PDF</button><button id="pngBtn" class="btn" title="白底 PNG 圖片">PNG</button><button id="pngClearBtn" class="btn" title="去背 PNG，可以直接疊在影片上">去背 PNG</button></div>
+        <label class="check"><input id="pngWhite" type="checkbox"/> 去背 PNG 用白色譜（放在深色影片上）</label>
+        <div class="btn-row"><button id="midiBtn" class="btn">MIDI</button><button id="texBtn" class="btn">AlphaTex</button></div>
+        <p class="hint">匯出的是目前顯示的軌道和譜（六線譜／五線譜／簡譜）。可開啟 GP3–GP8、MusicXML、MIDI 和專案檔。</p>
+      </section>
+      <section class="card keys">
+        <h3>快捷鍵</h3>
+        <dl>
+          <dt>點弦上</dt><dd>改單一個音</dd>
+          <dt>點線外</dt><dd>選整拍（全部音）</dd>
+          <dt>⇧點 ⇧← →</dt><dd>選一段拍子</dd>
+          <dt>0–9</dt><dd>格數／簡譜／鼓點</dd>
+          <dt>] [</dt><dd>升、降半音</dd>
+          <dt>⇧↑ ⇧↓</dt><dd>高、低八度</dd>
+          <dt>− ＝</dt><dd>時值變長／變短</dd>
+          <dt>. / R</dt><dd>附點、三連音、休止</dd>
+          <dt>⌫</dt><dd>刪除（選取時刪整段）</dd>
+          <dt>⌘C ⌘X ⌘V</dt><dd>複製、剪下、貼上</dd>
+          <dt>⌘Z ⇧⌘Z</dt><dd>復原、重做</dd>
+          <dt>空白鍵</dt><dd>播放／暫停</dd>
+        </dl>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <div id="scoreView" class="view active">
+        <div class="edit-dock">
+          <div class="dock-row">
+            <div class="grp">
+              <button id="undoBtn" class="tool" data-icon="undo" title="復原 (⌘Z)"></button>
+              <button id="redoBtn" class="tool" data-icon="redo" title="重做 (⇧⌘Z)"></button>
+            </div>
+            <div class="grp"><button id="fitBtn" class="chip mono" title="縮放">100%</button></div>
+            <select id="trackSelect" class="select" title="顯示與編輯的軌道"></select>
+            <div class="grp" id="viewBtns" title="選擇要顯示的譜（可複選）">
+              <button class="chip on" data-viewmode="tab"><span>六線譜</span></button>
+              <button class="chip" data-viewmode="standard"><span>五線譜</span></button>
+              <button class="chip" data-viewmode="numbered"><span>簡譜</span></button>
+            </div>
+            <div class="spacer"></div>
+            <span id="selInfo" class="sel-info"></span>
+            <span id="fillLabel" class="fill-label"></span>
+            <span id="selectionLabel" class="sel-label" hidden></span>
+            <div id="readout" class="readout" aria-live="off">
+              <div class="ro"><span>小節</span><b id="roBar">1</b></div>
+              <div class="ro"><span>位置</span><b id="roPos">1/1</b></div>
+              <div class="ro"><span>弦</span><b id="roString">1</b></div>
+              <div class="ro"><span>格</span><b id="roFret">–</b></div>
+              <div class="ro"><span>音高</span><b id="roNote">–</b></div>
+            </div>
+          </div>
+          <div id="editorPanel" class="dock-row">
+            <div class="grp" id="durationBtns">
+              <button class="tool" data-dur="1" data-icon="n1" title="全音符"></button>
+              <button class="tool" data-dur="2" data-icon="n2" title="2 分音符"></button>
+              <button class="tool" data-dur="4" data-icon="n4" title="4 分音符"></button>
+              <button class="tool" data-dur="8" data-icon="n8" title="8 分音符"></button>
+              <button class="tool" data-dur="16" data-icon="n16" title="16 分音符"></button>
+              <button class="tool" data-dur="32" data-icon="n32" title="32 分音符"></button>
+            </div>
+            <div class="grp">
+              <button id="dotBtn" class="tool" data-icon="dot" title="附點 ( . )"></button>
+              <button id="tripletBtn" class="tool" data-icon="triplet" title="三連音 ( / )"></button>
+              <button id="restBtn" class="tool" data-icon="rest" title="休止符 ( R )"></button>
+            </div>
+            <div class="grp" id="inputModeBtns" title="數字鍵輸入的是什麼">
+              <button class="chip on" data-input="fret" title="數字鍵 = 格數"><span>格數</span></button>
+              <button class="chip" data-input="numbered" title="數字鍵 = 簡譜 1–7（依調性，0 是休止）"><span>簡譜</span></button>
+            </div>
+            <div class="grp" id="pitchBtns">
+              <button id="sharpBtn" class="chip mono" title="升半音 ( ] )"><span>♯</span><kbd>]</kbd></button>
+              <button id="flatBtn" class="chip mono" title="降半音 ( [ )"><span>♭</span><kbd>[</kbd></button>
+              <button id="octUpBtn" class="chip" title="高八度 ( ⇧↑ )"><span>高八度</span><kbd>⇧↑</kbd></button>
+              <button id="octDownBtn" class="chip" title="低八度 ( ⇧↓ )"><span>低八度</span><kbd>⇧↓</kbd></button>
+            </div>
+            <div class="grp" id="techBtns">
+              <button class="chip" data-tech="hammer" title="搥弦／勾弦"><span>搥勾</span><kbd>H</kbd></button>
+              <button class="chip" data-tech="slide" title="滑弦"><span>滑弦</span><kbd>S</kbd></button>
+              <button class="chip" data-tech="bend" title="推弦（連按切換幅度）"><span>推弦</span><kbd>B</kbd></button>
+              <button class="chip" data-tech="vibrato" title="揉弦"><span>揉弦</span><kbd>V</kbd></button>
+              <button class="chip" data-tech="palmMute" title="悶音 Palm Mute"><span>悶音</span><kbd>P</kbd></button>
+              <button class="chip" data-tech="letRing" title="延音 Let Ring"><span>延音</span><kbd>L</kbd></button>
+              <button class="chip" data-tech="dead" title="死音 Dead Note"><span>死音</span><kbd>X</kbd></button>
+              <button class="chip" data-tech="harmonic" title="自然泛音"><span>泛音</span><kbd>N</kbd></button>
+              <button class="chip" data-tech="tap" title="點弦"><span>點弦</span><kbd>T</kbd></button>
+              <button class="chip" data-tech="ghost" title="鬼音"><span>鬼音</span><kbd>G</kbd></button>
+            </div>
+            <div class="grp">
+              <button id="insertBeatBtn" class="chip" title="在游標前插入一拍 ( I )"><span>＋拍</span></button>
+              <button id="deleteBeatBtn" class="chip" title="刪除這一拍 ( ⇧⌫ )"><span>－拍</span></button>
+              <button id="insertBarBtn" class="chip" title="在這個小節後面插入空白小節"><span>＋小節</span></button>
+              <button id="deleteBarBtn" class="chip" title="刪除這個小節"><span>－小節</span></button>
+            </div>
+            <div class="grp" id="clipBtns">
+              <button id="selectBeatBtn" class="chip" title="選取整拍（Enter）。點譜面線條外面也會選整拍，⇧點一下或 ⇧← → 選一段"><span>選整拍</span><kbd>↵</kbd></button>
+              <button id="copyBtn" class="chip" title="複製 ( ⌘C )"><span>複製</span></button>
+              <button id="cutBtn" class="chip" title="剪下 ( ⌘X )"><span>剪下</span></button>
+              <button id="pasteBtn" class="chip" title="貼在游標前面 ( ⌘V )"><span>貼上</span></button>
+            </div>
+            <div class="grp annot" title="寫在游標這一拍上方">
+              <label>和弦<input id="chordInput" placeholder="Am7" maxlength="16" spellcheck="false"/></label>
+              <label>文字<input id="textInput" placeholder="註記" maxlength="60"/></label>
+            </div>
+          </div>
+          <div id="drumPad" class="dock-row drum-row" hidden></div>
+          <div id="samePitchChoices" class="dock-row alt-row"></div>
+        </div>
+        <div id="scoreScroll" class="score-scroll">
+          <div class="scorearea"><div id="alphaTab"></div></div>
+        </div>
+      </div>
+
+      <div id="liveView" class="view padded">
+        <div class="panel-head"><div><h2>彈奏 → 六線譜</h2><p>吉他接音效卡，跟著節拍器彈，錄完自動整理成可以編輯的六線譜。</p></div><span class="tag">單音・多音</span></div>
+        <div class="live-grid">
+          <section class="card">
+            <h3>音訊輸入</h3>
+            <label class="field">輸入裝置<select id="deviceSelect"><option value="">系統預設輸入</option></select></label>
+            <label class="field">辨識模式<select id="recMode"><option value="mono">單音旋律（含推弦、揉弦、連音）</option><option value="poly">多音（和弦、雙音、鋼琴）</option></select></label>
+            <label class="field">樂器<select id="recInstrument"><option value="guitar">🎸 吉他 → 六線譜</option><option value="bass">🎸 貝斯 → 四弦譜</option><option value="piano">🎹 鋼琴或其他樂器 → 五線譜</option></select></label>
+            <label class="field">輸入聲道<select id="channelSelect"><option value="auto">自動（訊號最大的聲道）</option></select></label>
+            <div id="channelMeters" class="ch-meters"></div>
+            <div class="pitch-display"><span>即時音高（實測）</span><div id="pitchText">—</div><small id="pitchDetail">按「開始錄製」後顯示</small></div>
+            <div id="meterBar" class="meter"><span></span></div>
+            <div class="record-actions"><button id="recordBtn" class="btn record">● 開始錄製</button><button id="stopRecordBtn" class="btn" disabled>■ 停止並轉譜</button></div>
+            <div class="capture-box">
+              <div class="capture-head"><strong>隨時記下</strong><span>不用先按錄音：持續聆聽，彈到喜歡的段落再按一下就寫成譜</span></div>
+              <div class="record-actions">
+                <button id="listenBtn" class="btn">◎ 開始聆聽</button>
+                <button id="captureBtn" class="btn primary" disabled>記下剛剛彈的</button>
+                <select id="captureSeconds" class="select" title="往回抓多久"><option value="10">10 秒</option><option value="20">20 秒</option><option value="30" selected>30 秒</option><option value="60">60 秒</option><option value="120">2 分鐘</option></select>
+              </div>
+            </div>
+            <div id="recordCounter" class="hint">尚未錄製</div>
+            <button id="importAudioBtn" class="btn wide" title="把已經錄好的音訊檔（WAV、MP3、M4A…）轉成譜，例如從 DAW 匯出的一軌">匯入音訊檔轉譜</button>
+            <input id="audioFileInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden/>
+            <button id="saveTakeBtn" class="btn wide" disabled title="把剛剛錄的原始聲音存成 WAV 檔">儲存這次錄音（WAV）</button>
+          </section>
+          <section class="card">
+            <h3>節拍與轉譜</h3>
+            <div class="field-row">
+              <label class="field">速度 BPM<input id="transcribeBpm" type="number" min="40" max="250" value="110"/></label>
+              <label class="field">節奏量化<select id="quantization"><option value="8">8 分音符</option><option value="16" selected>16 分音符</option><option value="4">4 分音符</option></select></label>
+            </div>
+            <label class="check"><input id="recCountIn" type="checkbox" checked/> 預備拍一小節（從預備拍後的第一拍開始記譜）</label>
+            <label class="check"><input id="recMetronome" type="checkbox" checked/> 錄音時打節拍器</label>
+            <label class="field">延遲補償（毫秒）<input id="recLatency" type="number" min="-200" max="400" value="0" title="錄出來的音整體偏後就加大，偏前就減小"/></label>
+            <label class="field">指法模式<select id="fretBias"><option value="smooth">流暢（待在把位裡）</option><option value="solo">Solo（偏細弦、方便推弦）</option><option value="position">指定把位</option><option value="low">低把位</option><option value="high">高把位</option></select></label>
+            <div class="field-row" id="positionRange" hidden>
+              <label class="field">從第幾格<input id="minFret" type="number" min="0" max="20" value="5"/></label>
+              <label class="field">到第幾格<input id="maxFretPos" type="number" min="3" max="24" value="8"/></label>
+            </div>
+            <label class="field">最高格數<input id="maxFret" type="number" min="12" max="24" value="22"/></label>
+            <button id="transcriptionDemoBtn" class="btn wide" title="用電腦合成的吉他聲音跑完整的辨識流程，不需要接吉他">用合成吉他聲測試整個流程</button>
+          </section>
+        </div>
+        <div class="info-box"><strong>哪些是實測、哪些是推測：</strong>音高、起始時間、長度是從聲音量出來的。<b>弦和格數無法從聲音得知</b>，是挑出最順手的位置或和弦指型，請自行校對。單音模式另外會從音高曲線推測推弦、揉弦、連音；多音模式用的是 Spotify 開源的 Basic Pitch 模型，可以聽和弦和鋼琴，但不會標演奏技巧，也可能多聽或漏聽幾個音。所有分析都在本機進行，不會上傳。</div>
+        <div class="info-box tip"><strong>搭配 DAW 使用：</strong>macOS 允許多個程式同時使用同一個音效卡輸入。在 Logic 或 Pro Tools 照常掛 plugin 監聽，這裡選同一個輸入，錄到的就是沒有效果的 DI 訊號。瀏覽器版通常只拿得到輸入 1 和 2；要錄音箱或 DAW 輸出的聲音，把它送到一個 loopback 輸入（RME TotalMix 的 Loopback 或 BlackHole）再選那個輸入。</div>
+        <section class="card live-preview-card">
+          <h3>即時譜面 <span id="livePreviewNote" class="hint inline">錄音或聆聽時，邊彈邊出現（單音模式）</span></h3>
+          <div class="preview-sheet"><div id="livePreview"></div></div>
+        </section>
+        <h3 class="section-title">辨識記錄</h3>
+        <div id="liveEvents" class="event-list">尚無音符。</div>
+      </div>
+
+      <div id="composeView" class="view padded">
+        <div class="panel-head"><div><h2>貼上 AI 產生的譜</h2><p>請 ChatGPT 或 Claude 輸出 AlphaTex 格式，貼在下面再按「套用」。</p></div><button id="sampleTexBtn" class="btn">載入範例</button></div>
+        <textarea id="alphaTexInput" spellcheck="false" aria-label="AlphaTex 製譜內容"></textarea>
+        <div class="compose-actions"><button id="composeApply" class="btn primary">套用並顯示譜面</button><span class="hint">套用會取代目前的譜面，建議先儲存。</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="transport">
+    <div class="grp">
+      <button id="stopBtn" class="tool" data-icon="stop" title="停止（下次從游標位置開始播放）"></button>
+      <button id="playBtn" class="tool play" title="播放 / 暫停（空白鍵）"><span class="i-play" data-icon="play"></span><span class="i-pause" data-icon="pause"></span></button>
+      <button id="loopBtn" class="tool" data-icon="loop" title="整曲循環"></button>
+    </div>
+    <div class="grp">
+      <button id="loopABtn" class="chip mono" title="把游標所在的小節設成循環起點">A</button>
+      <button id="loopBBtn" class="chip mono" title="把游標所在的小節設成循環終點">B</button>
+      <button id="loopClearBtn" class="chip" title="取消小節循環">✕</button>
+    </div>
+    <span id="loopLabel" class="loop-label"></span>
+    <div class="grp">
+      <button id="metronomeBtn" class="chip" title="播放時打節拍器"><span>節拍器</span></button>
+      <button id="countInBtn" class="chip" title="開始播放前先數一小節"><span>預備拍</span></button>
+    </div>
+    <div class="time mono"><strong id="timeText">00:00</strong><span>/</span><span id="songDuration">00:00</span></div>
+    <input id="seekBar" class="seek" type="range" min="0" max="1000" value="0" aria-label="播放位置"/>
+    <div class="speed"><span>速度</span><input id="speedSlider" type="range" min="40" max="150" value="100" aria-label="播放速度"/><strong id="speedValue" class="mono">100%</strong></div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="helpModal" class="modal-backdrop" hidden>
+    <div class="modal">
+      <button id="closeHelp" class="btn round close">✕</button>
+      <h2>NoteClaw 使用方式</h2>
+      <p><b>讀譜：</b>按「開啟」選擇 GP3–GP8、MusicXML 或 MIDI，也可以把檔案直接拖進視窗。</p>
+      <p><b>改譜：</b>在六線譜上點一下放游標，用方向鍵移動，直接打數字輸入格數。同一拍在別條弦打數字就是和弦。工具列或快捷鍵可以改時值、加演奏技巧、增刪小節。拍數不對的小節會標成紅色。</p>
+      <p><b>曲目與軌道：</b>左側可以改曲名、速度、調性、拍號，切換軌道、換音色、加吉他或貝斯軌。工具列可以選擇顯示六線譜、五線譜、簡譜（可複選），以及在游標那一拍上方寫和弦名稱或文字註記。</p>
+      <p><b>播放：</b>空白鍵播放／暫停，譜面會跟著捲動。按停止後，下次會從游標所在的位置開始播放。</p>
+      <p><b>循環練習：</b>把游標放在起點小節按 A，放在終點小節按 B，就會循環這一段。</p>
+      <p><b>快捷鍵：</b>方向鍵移動游標 · 0–9 輸入格數（簡譜模式是 1–7，鼓組是鼓點）· ] [ 升降半音 · ⇧↑ ⇧↓ 八度 · −／＝ 時值變長／變短 · <kbd>.</kbd> 附點 · <kbd>/</kbd> 三連音 · R 休止 · ⌫ 刪除 · ⌘C／⌘X／⌘V 複製剪下貼上 · ⌘Z／⇧⌘Z 復原／重做 · 空白鍵播放。</p>
+      <p><b>選取：</b>點在弦上只改那一個音；點在六線譜上下（符桿那一帶）會選整拍，裡面的音全部一起改或刪；按住 ⇧ 再點或按 ⇧← → 可以選一段。Esc 取消選取。</p>
+      <p><b>簡譜輸入：</b>工具列切到「簡譜」，數字 1–7 依目前調性輸入（例如 D 大調的 1 是 D），自動挑最接近上一個音的八度和把位；0 是休止。開 MIDI 檔會自動判斷調性並打開簡譜。</p>
+      <p><b>鼓組：</b>左邊「＋鼓組」新增鼓軌。數字鍵 1 大鼓、2 小鼓、3／4 Hi-hat 閉／開、5 Crash、6 Ride、7–9 Tom、0 邊擊；同一拍按多個就是同時打。</p>
+      <p><b>匯出圖片：</b>PDF、PNG、去背 PNG（可勾選白色譜，放在深色影片上）。</p>
+      <p><b>隨時記下：</b>「彈奏記譜」頁按「開始聆聽」，彈完想留下的段落後按「記下剛剛彈的」。</p>
+      <p><b>存檔：</b>「儲存 .gp」給 Guitar Pro 等軟體用；「儲存專案檔」是本軟體的無損格式。太複雜的推弦曲線存成 .gp 時會被簡化，存檔時會告訴你有幾個。</p>
+      <p><b>AI 譜：</b>請 ChatGPT 或 Claude 輸出 AlphaTex，貼進「AI 貼譜」頁面套用。</p>
+      <p><b>彈奏記譜：</b>切到「彈奏記譜」，接上音效卡的 DI 訊號，錄完按停止。目前是單音旋律原型。</p>
+    </div>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
