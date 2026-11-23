@@ -13,7 +13,7 @@ import './style.css';
 import './themes.css';
 
 // Look: original console or one of the comic themes. The picker is temporary while a style is chosen.
-const THEMES = [['', '原本'], ['ink', 'A 墨線'], ['night', 'B 夜間'], ['pop', 'C 普普']];
+const THEMES = [['', '原本'], ['pop', 'C 原版'], ['pop-soft', 'C1 柔和'], ['pop-dusk', 'C2 夜間']];
 function applyTheme(id) {
   if (id) document.documentElement.dataset.theme = id; else delete document.documentElement.dataset.theme;
   try { localStorage.setItem('noteclaw-theme', id); } catch {}
