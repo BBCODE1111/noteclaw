@@ -1,3 +1,5 @@
+<p align="center"><img src="public/brand/logo-wide.png" alt="NoteClaw" width="480"/></p>
+
 # NoteClaw
 
 給吉他手的六線譜編輯器：打開 Guitar Pro 譜、直接在譜上改、播放練習，還能把你彈的、錄的、AI 寫的東西直接變成可以編輯的譜。所有處理都在你自己的電腦上進行，不上傳任何聲音或譜。
@@ -23,7 +25,9 @@ npm install
 npm run dev
 ```
 
-然後用 Chrome 開 <http://127.0.0.1:5173>（錄音功能需要 Chrome 才能選到音效卡）。也可以雙擊 `run.command`，第一次會自動安裝需要的套件。
+線上版：<https://noteclaw-ddky.vercel.app>（用 Chrome 打開後，網址列右側的「安裝」可以把它裝成獨立的 App）。
+
+在自己電腦上執行時，用 Chrome 開 <http://127.0.0.1:5173>（錄音功能需要 Chrome 才能選到音效卡）。也可以雙擊 `run.command`，第一次會自動安裝需要的套件。
 
 開發用指令：
 
@@ -52,5 +56,6 @@ node tools/analyze-wav.mjs 錄音.wav --bpm 80   # 離線分析一段錄音，�
 - [alphaTab](https://github.com/CoderLine/alphaTab)（MPL-2.0）：譜面讀取、顯示與播放
 - [Basic Pitch](https://github.com/spotify/basic-pitch-ts)（Apache-2.0）：多音轉譜模型，透過 TensorFlow.js 在本機執行
 - [jsPDF](https://github.com/parallax/jsPDF)（MIT）：PDF 匯出
+- [Luckiest Guy](https://fonts.google.com/specimen/Luckiest+Guy)（Apache-2.0，Astigmatic）：NOTECLAW 字標字體
 
 NoteClaw 與 Guitar Pro / Arobas Music 沒有任何關係；Guitar Pro 是其所有者的商標，這裡只是說明可以讀寫它的檔案格式。

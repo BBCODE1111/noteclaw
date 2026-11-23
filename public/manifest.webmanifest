@@ -1,0 +1,19 @@
+{
+  "name": "NoteClaw",
+  "short_name": "NoteClaw",
+  "description": "Guitar tab editor: open Guitar Pro files, edit, practice, and turn what you play into tab.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07090d",
+  "theme_color": "#07090d",
+  "icons": [
+    { "src": "brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "brand/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "brand/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "brand/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "file_handlers": [
+    { "action": "./", "accept": { "application/octet-stream": [".gp", ".gp3", ".gp4", ".gp5", ".gpx", ".noteclaw"] } }
+  ]
+}

@@ -1,4 +1,5 @@
 import * as alphaTab from '@coderline/alphatab';
+import '@fontsource/luckiest-guy/latin-400.css';
 import { midiName } from './fingering.js';
 import { DRUM_KIT, setKeySignature } from './editor/ops.ts';
 import { initLive } from './ui/live.js';
@@ -233,6 +234,8 @@ initLive({
 // Browser drag/drop / keyboard shortcuts.
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer?.files?.[0])openFile(e.dataTransfer.files[0]);});
+// Installed app: files opened from Finder ("Open With → NoteClaw") arrive through the launch queue.
+if('launchQueue' in window) window.launchQueue.setConsumer(async params=>{const handle=params.files?.[0];if(handle)openFile(await handle.getFile());});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape')$('helpModal').hidden=true;
   if((e.metaKey||e.ctrlKey)&&e.key==='o'){e.preventDefault();$('fileInput').click();}

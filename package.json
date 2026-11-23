@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@coderline/alphatab": "^1.9.0",
+    "@fontsource/luckiest-guy": "^5.3.0",
     "@spotify/basic-pitch": "^1.0.1",
     "jspdf": "^4.2.1"
   },

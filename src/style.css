@@ -29,7 +29,7 @@ button:disabled { cursor: not-allowed; opacity: .32; }
 .brand { display: flex; align-items: center; gap: 9px; flex: none; }
 .brand-mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; font-size: 14px;
   color: #04121a; background: linear-gradient(135deg, var(--accent), #5b8cff); box-shadow: 0 0 18px rgba(46, 230, 214, .35); }
-.brand-name { font-weight: 650; letter-spacing: .2px; }
+.brand-name { font: 400 17px/1 'Luckiest Guy', var(--sans, system-ui); letter-spacing: .6px; padding-top: 3px; color: #fff; }
 .ver { font: 10px var(--mono); color: var(--faint); border: 1px solid var(--line-2); border-radius: 5px; padding: 1px 5px; }
 .tabs { display: flex; gap: 2px; padding: 3px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; flex: none; }
 .tabs button { border: 0; background: transparent; color: var(--dim); padding: 5px 13px; border-radius: 7px; font-size: 12.5px; white-space: nowrap; }
@@ -264,6 +264,6 @@ textarea { flex: 1; min-height: 260px; width: 100%; resize: vertical; background
 .hint.inline { margin: 0; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .preview-sheet { margin-top: 10px; background: #fbfcfe; border-radius: 10px; padding: 10px 14px; min-height: 120px; max-height: 340px; overflow: auto; color: #16202b; }
 
-/* Logo: public/brand/logo.svg replaces the text mark as soon as the file exists. */
+/* Logo: the paw-and-pen mark (public/brand/logo.svg) on a white tile, like the app icon. */
+.brand-mark { width: 30px; height: 30px; padding: 3px; background: #fff; box-shadow: 0 0 14px rgba(255, 255, 255, .12); }
 .brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.brand-mark:has(img) { font-size: 0; background: none; box-shadow: none; }
