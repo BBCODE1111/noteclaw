@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-theme="pop-soft">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -8,7 +8,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png"/>
   <link rel="apple-touch-icon" href="brand/apple-touch-icon.png"/>
   <link rel="manifest" href="manifest.webmanifest"/>
-  <meta name="theme-color" content="#07090d"/>
+  <meta name="theme-color" content="#86a9bd"/>
+  <script>try{if(localStorage.getItem('noteclaw-theme')==='pop-dusk')document.documentElement.dataset.theme='pop-dusk'}catch(e){}</script>
   <meta name="apple-mobile-web-app-title" content="NoteClaw"/>
 </head>
 <body>
@@ -30,7 +31,7 @@
       <button id="newBtn" class="btn">新譜</button>
       <button id="openBtn" class="btn">開啟</button>
       <button id="saveBtn" class="btn primary">儲存 .gp</button>
-      <button id="panelBtn" class="btn panel-btn" title="曲目、調性、軌道、調弦、匯出">設定</button><button id="helpBtn" class="btn round" title="使用方式">?</button>
+      <button id="panelBtn" class="btn panel-btn" title="曲目、調性、軌道、調弦、匯出">設定</button><button id="themeBtn" class="btn round" title="換成夜間（暗色）">☾</button><button id="helpBtn" class="btn round" title="使用方式">?</button>
       <input id="fileInput" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx,.xml,.musicxml,.mxl,.mid,.midi,.txt,.alphatex,.noteclaw,.gstudio" hidden/>
     </div>
   </header>

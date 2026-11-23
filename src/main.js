@@ -12,20 +12,17 @@ import { exportPng, exportPdf } from './io/image-export.js';
 import './style.css';
 import './themes.css';
 
-// Look: original console or one of the comic themes. The picker is temporary while a style is chosen.
-const THEMES = [['', '原本'], ['pop', 'C 原版'], ['pop-soft', 'C1 柔和'], ['pop-dusk', 'C2 夜間']];
+// Look: 柔和 (light) by default, 夜間 (dark) on request. index.html applies the saved choice before first paint.
 function applyTheme(id) {
-  if (id) document.documentElement.dataset.theme = id; else delete document.documentElement.dataset.theme;
+  document.documentElement.dataset.theme = id;
   try { localStorage.setItem('noteclaw-theme', id); } catch {}
-  document.querySelectorAll('.theme-picker button').forEach(b => b.classList.toggle('on', b.dataset.theme === id));
+  const b = document.getElementById('themeBtn');
+  if (b) { const dark = id === 'pop-dusk'; b.textContent = dark ? '☀' : '☾'; b.title = dark ? '換成柔和（亮色）' : '換成夜間（暗色）'; }
 }
 {
-  const picker = document.createElement('div'); picker.className = 'theme-picker'; picker.append('風格');
-  for (const [id, label] of THEMES) { const b = document.createElement('button'); b.dataset.theme = id; b.textContent = label; b.onclick = () => applyTheme(id); picker.append(b); }
-  document.body.append(picker);
-  let saved = new URLSearchParams(location.search).get('theme');
-  if (saved === null) try { saved = localStorage.getItem('noteclaw-theme'); } catch {}
-  applyTheme(THEMES.some(([id]) => id === saved) ? saved : '');
+  const q = new URLSearchParams(location.search).get('theme');
+  applyTheme(q === 'pop-dusk' || (q === null && document.documentElement.dataset.theme === 'pop-dusk') ? 'pop-dusk' : 'pop-soft');
+  document.getElementById('themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'pop-dusk' ? 'pop-soft' : 'pop-dusk');
 }
 
 const $ = id => document.getElementById(id);
