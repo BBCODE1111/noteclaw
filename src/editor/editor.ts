@@ -30,7 +30,7 @@ export interface EditorState {
 export type InputMode = 'fret' | 'numbered';
 export interface TrackInfo {
   index: number; name: string; program: number; volume: number; mute: boolean; solo: boolean;
-  visible: boolean; active: boolean; strings: number; percussion: boolean;
+  visible: boolean; active: boolean; strings: number; percussion: boolean; tuning: number[]; capo: number;
 }
 export interface EditorHooks {
   /** Called whenever the cursor or score changes so the toolbar can refresh. */
@@ -299,6 +299,14 @@ export class TabEditor {
   }
   setProgram(track: number, program: number): void { this.apply(s => ops.setProgram(s, track, program), { needsStrings: false }); }
   setTrackVolume(track: number, volume: number): void { this.apply(s => ops.setTrackVolume(s, track, volume), { needsStrings: false }); }
+  setTuning(track: number, pitches: number[], keepPitch: boolean): void {
+    let result = { dropped: 0, moved: 0 };
+    const ok = this.apply((s, c) => { result = ops.setTuning(s, track, pitches, keepPitch); return { ...c, string: Math.min(c.string, pitches.length) }; }, { needsStrings: false });
+    if (!ok) return;
+    const notes = [result.moved && `${result.moved} 個音換到別條弦`, result.dropped && `${result.dropped} 個音彈不到、已移除`].filter(Boolean);
+    this.hooks.toast(notes.length ? `已換調弦：${notes.join('，')}（⌘Z 可復原）` : '已換調弦');
+  }
+  setCapo(track: number, fret: number): void { this.apply(s => ops.setCapo(s, track, fret), { needsStrings: false }); }
   renameTrack(track: number, name: string): void { this.apply(s => { s.tracks[track].name = name.trim() || s.tracks[track].name; }, { needsStrings: false }); }
   /** Solo / mute act on the player immediately and are stored with the track; they are not undo steps. */
   setMute(track: number, mute: boolean): void { this.mix(track, t => { t.playbackInfo.isMute = mute; this.api.changeTrackMute([t], mute); }); }
@@ -576,7 +584,8 @@ export class TabEditor {
       tracks: score.tracks.map((t, index) => ({
         index, name: t.name || `Track ${index + 1}`, program: t.playbackInfo.program, volume: t.playbackInfo.volume,
         mute: t.playbackInfo.isMute, solo: t.playbackInfo.isSolo, visible: this.visible.has(index), active: index === c.track,
-        strings: t.staves[0].tuning.length, percussion: t.staves[0].isPercussion
+        strings: t.staves[0].tuning.length, percussion: t.staves[0].isPercussion,
+        tuning: [...t.staves[0].tuning], capo: t.staves[0].capo
       })),
       view: { tab: staff.showTablature, standard: staff.showStandardNotation, numbered: staff.showNumbered },
       drums, drumHits: drums ? ops.drumHits(score, c) : [],

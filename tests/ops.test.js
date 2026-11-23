@@ -262,3 +262,27 @@ test('numbered notation replaces a single melody note instead of stacking a chor
   assert.equal(notes.length, 1);
   assert.equal((ops.openPitch(ops.staffOf(sc, r.result), notes[0].string) + notes[0].fret) % 12, 7);
 });
+
+test('changing tuning keeps the sound (new frets) or keeps the frets', () => {
+  const dropD = ops.TUNINGS.find(t => t.id === 'dropD').pitches;
+  let sc = edit(load(TEX), s => ops.setTuning(s, 0, dropD, true)).score;
+  assert.equal(ops.tuningId([...sc.tracks[0].staves[0].tuning]), 'dropD');
+  assert.match(sig(sc), / \| 1:1\/11$/);            // low E fret 9 (C♯) becomes fret 11 on the low D string
+  assert.match(sig(sc), /^8:4\/5 8:4\/7/);           // other strings unchanged
+  sc = edit(load(TEX), s => ops.setTuning(s, 0, dropD, false)).score;
+  assert.match(sig(sc), / \| 1:1\/9$/);             // frets kept, so it now sounds a whole step lower
+  const eb = ops.TUNINGS.find(t => t.id === 'eb').pitches;
+  sc = edit(load(TEX), s => ops.setTuning(s, 0, eb, true)).score;
+  assert.match(sig(sc), /\| 4:6\/2 4:6\/3 4:6\/4 4:6\/5 \|/);
+});
+
+test('a 7-string tuning adds the new string below; capo counts in the pitch', () => {
+  const seven = ops.TUNINGS.find(t => t.id === 'std7').pitches;
+  let sc = edit(load(TEX), s => ops.setTuning(s, 0, seven, true)).score;
+  assert.equal(sc.tracks[0].staves[0].tuning.length, 7);
+  assert.match(sig(sc), / \| 1:2\/9$/);
+  sc = edit(load(TEX), s => ops.setCapo(s, 0, 2)).score;
+  assert.equal(sc.tracks[0].staves[0].capo, 2);
+  assert.equal(ops.openPitch(ops.staffOf(sc, at0), 6), 66);
+  assert.throws(() => ops.setTuning(sc, 0, [], true));
+});

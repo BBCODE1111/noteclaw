@@ -46,7 +46,8 @@ export const isDrums = (score: Score, track: number): boolean => !!score.tracks[
 export const isWritable = (score: Score, track: number): boolean => isEditable(score, track) || isDrums(score, track);
 /** Guitarist string number (1 = highest pitched string) for a model string number. */
 export const guitarString = (count: number, modelString: number): number => count + 1 - modelString;
-export const openPitch = (staff: Staff, modelString: number): number => staff.tuning[staff.tuning.length - modelString];
+/** Sounding pitch of an open string, capo included (frets are written relative to the capo). */
+export const openPitch = (staff: Staff, modelString: number): number => staff.capo + staff.tuning[staff.tuning.length - modelString];
 
 export function clampCursor(score: Score, c: Cursor): Cursor {
   const track = Math.min(Math.max(c.track, 0), score.tracks.length - 1);
@@ -596,6 +597,86 @@ export function setProgram(score: Score, track: number, program: number): void {
 /** Track volume on Guitar Pro's 0–16 scale. */
 export function setTrackVolume(score: Score, track: number, volume: number): void {
   score.tracks[track].playbackInfo.volume = Math.min(16, Math.max(0, Math.round(volume)));
+}
+
+// ---- tuning and capo ----
+/** Common tunings, highest string first (alphaTab order), as MIDI note numbers. */
+export const TUNINGS: { id: string; name: string; strings: number; pitches: number[] }[] = [
+  { id: 'std', name: '標準 E A D G B E', strings: 6, pitches: [64, 59, 55, 50, 45, 40] },
+  { id: 'dropD', name: 'Drop D（D A D G B E）', strings: 6, pitches: [64, 59, 55, 50, 45, 38] },
+  { id: 'eb', name: '降半音 E♭', strings: 6, pitches: [63, 58, 54, 49, 44, 39] },
+  { id: 'dStd', name: '降全音 D', strings: 6, pitches: [62, 57, 53, 48, 43, 38] },
+  { id: 'dropCs', name: 'Drop C♯', strings: 6, pitches: [63, 58, 54, 49, 44, 37] },
+  { id: 'dropC', name: 'Drop C', strings: 6, pitches: [62, 57, 53, 48, 43, 36] },
+  { id: 'dropB', name: 'Drop B', strings: 6, pitches: [61, 56, 52, 47, 42, 35] },
+  { id: 'dadgad', name: 'DADGAD', strings: 6, pitches: [62, 57, 55, 50, 45, 38] },
+  { id: 'openG', name: 'Open G（D G D G B D）', strings: 6, pitches: [62, 59, 55, 50, 43, 38] },
+  { id: 'openD', name: 'Open D（D A D F♯ A D）', strings: 6, pitches: [62, 57, 54, 50, 45, 38] },
+  { id: 'openE', name: 'Open E（E B E G♯ B E）', strings: 6, pitches: [64, 59, 56, 52, 47, 40] },
+  { id: 'openC', name: 'Open C（C G C G C E）', strings: 6, pitches: [64, 60, 55, 48, 43, 36] },
+  { id: 'std7', name: '七弦標準 B E A D G B E', strings: 7, pitches: [64, 59, 55, 50, 45, 40, 35] },
+  { id: 'drop7A', name: '七弦 Drop A', strings: 7, pitches: [64, 59, 55, 50, 45, 40, 33] },
+  { id: 'std8', name: '八弦標準 F♯ B E A D G B E', strings: 8, pitches: [64, 59, 55, 50, 45, 40, 35, 30] },
+  { id: 'bass4', name: '貝斯 E A D G', strings: 4, pitches: [43, 38, 33, 28] },
+  { id: 'bassDropD', name: '貝斯 Drop D', strings: 4, pitches: [43, 38, 33, 26] },
+  { id: 'bassEb', name: '貝斯 降半音 E♭', strings: 4, pitches: [42, 37, 32, 27] },
+  { id: 'bass5', name: '五弦貝斯 B E A D G', strings: 5, pitches: [43, 38, 33, 28, 23] },
+  { id: 'bass6', name: '六弦貝斯 B E A D G C', strings: 6, pitches: [48, 43, 38, 33, 28, 23] },
+  { id: 'uke', name: '烏克麗麗 G C E A', strings: 4, pitches: [69, 64, 60, 67] }
+];
+export const tuningId = (pitches: number[]): string | null =>
+  TUNINGS.find(t => t.pitches.length === pitches.length && t.pitches.every((p, i) => p === pitches[i]))?.id ?? null;
+
+/**
+ * Change a track's tuning (pitches highest string first). With keepPitch every note keeps its sound and gets
+ * new frets (moving to another string when needed); otherwise the frets stay and the sound changes.
+ * Strings are matched from the highest one, so adding a 7th string adds it below. Returns notes that had to go.
+ */
+export function setTuning(score: Score, track: number, pitches: number[], keepPitch: boolean): { dropped: number; moved: number } {
+  if (!pitches.length || pitches.length > 10 || pitches.some(p => !(p >= 0 && p <= 127))) throw new Error('不支援的調弦');
+  const staff = score.tracks[track]?.staves[0];
+  if (!staff || staff.isPercussion || !staff.tuning.length) throw new Error('只有弦樂器軌可以調弦');
+  const oldCount = staff.tuning.length, newCount = pitches.length, shift = newCount - oldCount;
+  const oldOpen = (s: number) => staff.capo + staff.tuning[oldCount - s];
+  const newOpen = (s: number) => staff.capo + pitches[newCount - s];
+  let dropped = 0, moved = 0;
+  // Where each tied note went, so the note it is tied to follows it onto the same string.
+  const tieStrings = new Map<string, number>();
+  for (const bar of staff.bars) for (const voice of bar.voices) for (const beat of voice.beats) {
+    const placed: { note: Note; string: number; fret: number }[] = [];
+    const taken = new Set<number>();
+    const notes = [...beat.notes].sort((a, b) => b.string - a.string);
+    for (const note of notes) {
+      const pitch = oldOpen(note.string) + note.fret;
+      let string = note.string + shift, fret = note.fret;
+      if (keepPitch) {
+        const tied = note.isTieDestination ? tieStrings.get(`${pitch}`) : undefined;
+        const ok = (s: number) => s >= 1 && s <= newCount && !taken.has(s) && pitch - newOpen(s) >= 0 && pitch - newOpen(s) <= MAX_FRET;
+        if (tied !== undefined && ok(tied)) string = tied;
+        else if (!ok(string)) {
+          const options = Array.from({ length: newCount }, (_, i) => i + 1).filter(ok);
+          if (!options.length) { beat.removeNote(note); dropped++; continue; }
+          // Prefer the closest string, then the lower fret.
+          options.sort((a, b) => Math.abs(a - string) - Math.abs(b - string) || (pitch - newOpen(a)) - (pitch - newOpen(b)));
+          string = options[0]; moved++;
+        }
+        fret = pitch - newOpen(string);
+      } else if (string < 1 || taken.has(string)) { beat.removeNote(note); dropped++; continue; }
+      taken.add(string);
+      placed.push({ note, string, fret });
+      if (note.isTieOrigin || note.tieDestination) tieStrings.set(`${pitch}`, string);
+    }
+    for (const p of placed) { p.note.string = p.string; p.note.fret = p.fret; }
+    if (!beat.notes.length && !beat.isRest) beat.isEmpty = false;
+  }
+  staff.stringTuning = new Tuning('', [...pitches], false);
+  return { dropped, moved };
+}
+/** Capo fret (0 = none). Frets stay as written, relative to the capo, so the music sounds higher. */
+export function setCapo(score: Score, track: number, fret: number): void {
+  const staff = score.tracks[track]?.staves[0];
+  if (!staff || staff.isPercussion || !staff.tuning.length) throw new Error('只有弦樂器軌可以夾移調夾');
+  staff.capo = Math.min(12, Math.max(0, Math.round(fret)));
 }
 
 // ---- undo / redo ----

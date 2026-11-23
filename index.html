@@ -30,7 +30,7 @@
       <button id="newBtn" class="btn">新譜</button>
       <button id="openBtn" class="btn">開啟</button>
       <button id="saveBtn" class="btn primary">儲存 .gp</button>
-      <button id="helpBtn" class="btn round" title="使用方式">?</button>
+      <button id="panelBtn" class="btn panel-btn" title="曲目、調性、軌道、調弦、匯出">設定</button><button id="helpBtn" class="btn round" title="使用方式">?</button>
       <input id="fileInput" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx,.xml,.musicxml,.mxl,.mid,.midi,.txt,.alphatex,.noteclaw,.gstudio" hidden/>
     </div>
   </header>
@@ -53,6 +53,14 @@
         <div id="trackList" class="track-list"></div>
         <label class="field">音色<select id="programSelect"></select></label>
         <label class="field">音量<input id="trackVolume" type="range" min="0" max="16" step="1" value="12"/></label>
+        <div id="tuningBox" class="tuning-box">
+          <div class="field-row">
+            <label class="field">調弦<select id="tuningSelect"></select></label>
+            <label class="field capo">移調夾<select id="capoSelect"></select></label>
+          </div>
+          <div id="stringPitches" class="string-pitches" title="每條弦的音，可以個別調整"></div>
+          <label class="check"><input id="keepPitchCheck" type="checkbox" checked/> 換調弦時保持音高（自動改格數）</label>
+        </div>
         <div class="btn-row"><button id="addGuitarBtn" class="btn">＋吉他</button><button id="addBassBtn" class="btn">＋貝斯</button><button id="addDrumBtn" class="btn">＋鼓組</button><button id="deleteTrackBtn" class="btn danger" title="刪除目前編輯的軌道">刪除</button></div>
         <p class="hint">點軌道名稱切換編輯對象。鼓組軌用數字鍵 1–0 打鼓點。「顯」同時顯示多軌，S 獨奏，M 靜音。</p>
       </section>

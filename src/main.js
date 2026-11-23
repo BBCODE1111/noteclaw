@@ -231,6 +231,12 @@ initLive({
     showToast(`已產生 ${notes.length} 個音符的譜。${warning || '音高是實測的，弦、格和技巧是推測的，請校對。'}`);
   }
 });
+// Narrow windows: the side panel (song, key, tracks, tuning, export) opens as a drawer.
+$('panelBtn').onclick = () => { document.body.classList.toggle('panel-open'); $('panelBtn').classList.toggle('on', document.body.classList.contains('panel-open')); };
+document.addEventListener('pointerdown', e => {
+  if (document.body.classList.contains('panel-open') && !e.target.closest('.inspector, #panelBtn')) { document.body.classList.remove('panel-open'); $('panelBtn').classList.remove('on'); }
+});
+
 // Browser drag/drop / keyboard shortcuts.
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer?.files?.[0])openFile(e.dataTransfer.files[0]);});

@@ -174,7 +174,10 @@ textarea { flex: 1; min-height: 260px; width: 100%; resize: vertical; background
 @media (max-width: 1080px) { .song-sub, .song-file { display: none; } }
 @media (max-width: 900px) {
   .body { grid-template-columns: minmax(0, 1fr); }
-  .inspector, .brand-name, .ver, .status { display: none; }
+  .brand-name, .ver, .status { display: none; }
+  .inspector { display: none; position: fixed; z-index: 1200; top: 52px; left: 0; bottom: 0; width: min(320px, 88vw);
+    background: var(--panel); box-shadow: 12px 0 40px rgba(0, 0, 0, .5); }
+  body.panel-open .inspector { display: flex; }
   .topbar { gap: 10px; padding: 0 10px; }
   .speed span { display: none; }
   .speed input { width: 70px; }
@@ -267,3 +270,12 @@ textarea { flex: 1; min-height: 260px; width: 100%; resize: vertical; background
 /* Logo: the paw-and-pen mark (public/brand/logo.svg) on a white tile, like the app icon. */
 .brand-mark { width: 30px; height: 30px; padding: 3px; background: #fff; box-shadow: 0 0 14px rgba(255, 255, 255, .12); }
 .brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+/* Tuning and capo */
+.tuning-box { display: flex; flex-direction: column; gap: 8px; }
+.tuning-box[hidden] { display: none; }
+.tuning-box .field-row { grid-template-columns: minmax(0, 1fr) 86px; }
+.string-pitches { display: flex; gap: 4px; }
+.string-pitches select { flex: 1; min-width: 0; padding: 4px 2px; font: 11px var(--mono); text-align: center; text-align-last: center; }
+
+@media (min-width: 901px) { .panel-btn { display: none; } }

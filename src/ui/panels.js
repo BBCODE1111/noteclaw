@@ -1,5 +1,9 @@
 // Side panels and transport extras: song settings, tracks/mixer, view modes, annotations, loop and metronome.
 import { GM_INSTRUMENTS, GM_FAMILIES, GUITAR_PROGRAMS, instrumentIcon } from './gm.js';
+import { TUNINGS, tuningId } from '../editor/ops.ts';
+
+const NOTE_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+const noteName = p => `${NOTE_NAMES[p % 12]}${Math.floor(p / 12) - 1}`;
 
 const MAJOR = ['C♭', 'G♭', 'D♭', 'A♭', 'E♭', 'B♭', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯'];
 const MINOR = ['A♭', 'E♭', 'B♭', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯', 'G♯', 'D♯', 'A♯'];
@@ -71,6 +75,42 @@ export function initPanels({ api, editor, $, toast }) {
     const t = last?.tracks.find(x => x.active);
     if (t && confirm(`確定刪除軌道「${t.name}」？（可以用 ⌘Z 復原）`)) editor.deleteTrack(t.index);
   };
+  // ----- tuning and capo -----
+  const tuningGroups = [['吉他', t => t.strings >= 6 && !t.id.startsWith('bass')], ['貝斯', t => t.id.startsWith('bass')], ['其他', t => t.id === 'uke']];
+  for (const [label, test] of tuningGroups) {
+    const group = document.createElement('optgroup'); group.label = label;
+    TUNINGS.filter(test).forEach(t => group.append(new Option(t.name, t.id)));
+    $('tuningSelect').append(group);
+  }
+  $('tuningSelect').append(new Option('自訂（在下面逐弦調整）', 'custom'));
+  for (let f = 0; f <= 12; f++) $('capoSelect').append(new Option(f ? `第 ${f} 格` : '不夾', f));
+  const activeTrack = () => last?.tracks.find(t => t.active);
+  $('tuningSelect').onchange = () => {
+    const preset = TUNINGS.find(t => t.id === $('tuningSelect').value);
+    const t = activeTrack();
+    if (preset && t) editor.setTuning(t.index, preset.pitches, $('keepPitchCheck').checked);
+    $('tuningSelect').blur();
+  };
+  $('capoSelect').onchange = () => { const t = activeTrack(); if (t) editor.setCapo(t.index, Number($('capoSelect').value)); $('capoSelect').blur(); };
+  /** One note picker per string, lowest string on the left the way a guitarist reads a tuning. */
+  function renderStrings(t) {
+    const box = $('stringPitches');
+    const key = t.tuning.join(',');
+    if (box.dataset.key === key && box.contains(document.activeElement)) return;
+    box.dataset.key = key; box.replaceChildren();
+    [...t.tuning].reverse().forEach((pitch, i) => {
+      const sel = document.createElement('select');
+      sel.title = `第 ${t.tuning.length - i} 弦`;
+      for (let p = Math.max(0, pitch - 12); p <= Math.min(127, pitch + 12); p++) sel.append(new Option(noteName(p), p));
+      sel.value = String(pitch);
+      sel.onchange = () => {
+        const pitches = [...t.tuning]; pitches[t.tuning.length - 1 - i] = Number(sel.value);
+        editor.setTuning(t.index, pitches, $('keepPitchCheck').checked);
+      };
+      box.append(sel);
+    });
+  }
+
   function renderTracks(st) {
     const list = $('trackList'); list.replaceChildren();
     for (const t of st.tracks) {
@@ -95,6 +135,13 @@ export function initPanels({ api, editor, $, toast }) {
       set($('programSelect'), active.program);
       $('programSelect').disabled = active.percussion;
       set($('trackVolume'), active.volume);
+      const stringed = !active.percussion && active.strings > 0;
+      $('tuningBox').hidden = !stringed;
+      if (stringed) {
+        set($('tuningSelect'), tuningId(active.tuning) ?? 'custom');
+        set($('capoSelect'), active.capo);
+        renderStrings(active);
+      }
     }
     $('deleteTrackBtn').disabled = st.tracks.length <= 1;
   }
