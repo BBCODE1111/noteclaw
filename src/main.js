@@ -7,7 +7,8 @@ import { midiToAlphaTex } from './midi-import.js';
 import { TabEditor } from './editor/editor.ts';
 import { mountIcons } from './ui/icons.js';
 import { initPanels } from './ui/panels.js';
-import { exportGuitarPro, exportProject, importProject, PROJECT_EXTENSION, PROJECT_EXTENSIONS } from './io/files.ts';
+import { exportGuitarPro, exportProject, importProject, projectMedia, PROJECT_EXTENSION, PROJECT_EXTENSIONS } from './io/files.ts';
+import { initVideo, isMediaFile, readPoints } from './ui/video.js';
 import { exportPng, exportPdf } from './io/image-export.js';
 import './style.css';
 import './themes.css';
@@ -36,6 +37,7 @@ const SAMPLE = String.raw`\title "First Lick"
 :4 10.4 :8 9.4 7.4 :2 9.4 |`;
 
 let fileName = 'First Lick.gp', currentTrack = 0;
+let video = null; // set once the editor exists
 mountIcons();
 const api = new alphaTab.AlphaTabApi($('alphaTab'), {
   core: { fontDirectory: `${import.meta.env.BASE_URL}font/`, includeNoteBounds: true },
@@ -83,6 +85,7 @@ function onEditorState(st) {
   $('undoBtn').disabled = !st.canUndo; $('redoBtn').disabled = !st.canRedo;
   document.querySelectorAll('#editorPanel button').forEach(b => { b.disabled = !st.editable && !/Bar/.test(b.id); });
   panels.onState(st);
+  video?.onCursor();
   if (api.score) $('subTitle').textContent = `${api.score.artist ? api.score.artist + ' · ' : ''}${st.tracks.length} 軌 · ♩=${st.song.tempo}`;
   $('readout').hidden = !st.editable; $('selectionLabel').hidden = st.editable;
   // Strings-only controls are hidden on a drum track; the drum pad replaces them.
@@ -124,6 +127,7 @@ const editor = new TabEditor(api, $('alphaTab'), {
   playPause: () => togglePlay()
 });
 const panels = initPanels({ api, editor, $, toast: showToast });
+video = initVideo({ api, editor, $, toast: showToast, togglePlay: () => togglePlay() });
 $('undoBtn').onclick = () => editor.undo();
 // Drum pad: one button per kit piece, the same as number keys 1–0 on a drum track.
 $('drumPad').append(...DRUM_KIT.map(p => { const b = document.createElement('button'); b.dataset.out = p.out; b.innerHTML = `<span>${p.name}</span><kbd>${p.key}</kbd>`; b.onclick = () => editor.toggleDrum(p.id); return b; }));
@@ -175,6 +179,7 @@ $('openBtn').onclick=()=>$('fileInput').click();
 $('fileInput').onchange=async e=>{if(e.target.files?.[0])await openFile(e.target.files[0]);e.target.value='';};
 async function openFile(file) {
   try {
+    if (isMediaFile(file)) { video.attach(file); setView('score'); return; }
     const bytes=new Uint8Array(await file.arrayBuffer());
     fileName=file.name; currentTrack=0;editor.cursor.track=0;
     if (/\.midi?$/i.test(file.name)) {
@@ -192,7 +197,11 @@ async function openFile(file) {
       if(result.skippedDrums) note+=`${result.skippedDrums} 個鼓組裡沒有的打擊音沒有寫入。`;
       if(result.tempoChangeWarning) note+='曲中變速只用了第一個速度。';
       showToast(note);
-    } else if (new RegExp(`\\.(${PROJECT_EXTENSIONS.join('|')})$`,'i').test(file.name)) { editor.load(importProject(new TextDecoder().decode(bytes), api.settings)); }
+    } else if (new RegExp(`\\.(${PROJECT_EXTENSIONS.join('|')})$`,'i').test(file.name)) {
+      const text=new TextDecoder().decode(bytes), score=importProject(text, api.settings), media=projectMedia(text);
+      editor.load(score);
+      if (media && readPoints(score).length && video.mediaName !== media) showToast(`這個譜對齊過「${media}」。按下面的「影片」選同一個檔案，就會照存好的位置一起播。`);
+    }
     else if (/\.(txt|alphatex)$/i.test(file.name)) {const tex=new TextDecoder().decode(bytes);$('alphaTexInput').value=tex;api.tex(tex);}
     else api.load(bytes);
     setView('score');
@@ -209,7 +218,7 @@ $('saveBtn').onclick=()=>{
     if(out.approximated) showToast(`已存成 .gp。有 ${out.approximated} 個複雜的推弦／搖桿曲線超出 GP 格式的能力，已簡化成最接近的形狀。要完整保留請另外「儲存專案檔」。`);
   }catch(e){showToast('GP 匯出失敗：'+e.message);}
 };
-$('projectBtn').onclick=()=>{if(!api.score)return;try{download(exportProject(api.score),`${api.score.title||'Untitled'}.${PROJECT_EXTENSION}`,'application/json');editor.markSaved();setStatus('已下載專案檔');}catch(e){showToast('專案檔儲存失敗：'+e.message);}};
+$('projectBtn').onclick=()=>{if(!api.score)return;try{download(exportProject(api.score,video.mediaName),`${api.score.title||'Untitled'}.${PROJECT_EXTENSION}`,'application/json');editor.markSaved();setStatus('已下載專案檔');}catch(e){showToast('專案檔儲存失敗：'+e.message);}};
 $('midiBtn').onclick=()=>{try{api.downloadMidi();}catch(e){showToast('MIDI 匯出失敗：'+e.message);}};
 $('texBtn').onclick=()=>{if(!api.score)return;try{const ex=new alphaTab.exporter.AlphaTexExporter();const result=ex.export(api.score,api.settings);download(result,`${api.score.title||'Untitled'}.alphatex`,'text/plain');}catch(e){showToast('alphaTex 匯出失敗：'+e.message);}};
 // Pictures and PDF of what is on screen (shown tracks and staves), rendered off screen at high resolution.
@@ -265,4 +274,4 @@ $('alphaTexInput').value=SAMPLE;
 api.tex(SAMPLE);
 
 // Debug handle, development server only.
-if (import.meta.env.DEV) window.__gs = { api, alphaTab, editor, openFile };
+if (import.meta.env.DEV) window.__gs = { api, alphaTab, editor, openFile, video };

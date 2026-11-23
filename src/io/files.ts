@@ -54,8 +54,13 @@ export const PROJECT_EXTENSION = 'noteclaw';
 /** Extensions a project file may have, including the one used before the app was renamed. */
 export const PROJECT_EXTENSIONS = ['noteclaw', 'gstudio'];
 const FORMATS = ['noteclaw', 'guitar-studio'];
-export function exportProject(score: Score): string {
-  return JSON.stringify({ format: 'noteclaw', version: 1, score: JSON.parse(JsonConverter.scoreToJson(score)) });
+/** `media` names the video or audio the score is aligned to (the file itself is not stored). */
+export function exportProject(score: Score, media: string | null = null): string {
+  return JSON.stringify({ format: 'noteclaw', version: 1, ...(media ? { media } : {}), score: JSON.parse(JsonConverter.scoreToJson(score)) });
+}
+/** Name of the video or audio a project was aligned to, if any. */
+export function projectMedia(text: string): string | null {
+  try { const m = JSON.parse(text).media; return typeof m === 'string' ? m : null; } catch { return null; }
 }
 export function importProject(text: string, settings: alphaTab.Settings): Score {
   let data: { format?: string; score?: unknown };
