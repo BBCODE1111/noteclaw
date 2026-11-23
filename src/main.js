@@ -10,6 +10,23 @@ import { initPanels } from './ui/panels.js';
 import { exportGuitarPro, exportProject, importProject, PROJECT_EXTENSION, PROJECT_EXTENSIONS } from './io/files.ts';
 import { exportPng, exportPdf } from './io/image-export.js';
 import './style.css';
+import './themes.css';
+
+// Look: original console or one of the comic themes. The picker is temporary while a style is chosen.
+const THEMES = [['', '原本'], ['ink', 'A 墨線'], ['night', 'B 夜間'], ['pop', 'C 普普']];
+function applyTheme(id) {
+  if (id) document.documentElement.dataset.theme = id; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('noteclaw-theme', id); } catch {}
+  document.querySelectorAll('.theme-picker button').forEach(b => b.classList.toggle('on', b.dataset.theme === id));
+}
+{
+  const picker = document.createElement('div'); picker.className = 'theme-picker'; picker.append('風格');
+  for (const [id, label] of THEMES) { const b = document.createElement('button'); b.dataset.theme = id; b.textContent = label; b.onclick = () => applyTheme(id); picker.append(b); }
+  document.body.append(picker);
+  let saved = new URLSearchParams(location.search).get('theme');
+  if (saved === null) try { saved = localStorage.getItem('noteclaw-theme'); } catch {}
+  applyTheme(THEMES.some(([id]) => id === saved) ? saved : '');
+}
 
 const $ = id => document.getElementById(id);
 const SAMPLE = String.raw`\title "First Lick"
