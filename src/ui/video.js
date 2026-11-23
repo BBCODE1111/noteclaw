@@ -6,6 +6,8 @@
 // (MasterBar.syncPoints), so they are undoable and saved in the project file. Between two points the score
 // is stretched to fit; after the last one it keeps the last stretch.
 import * as alphaTab from '@coderline/alphatab';
+import { analyseRhythm, videoScore } from '../audio/video-tab.js';
+import { timeToBeat } from '../audio/beats.js';
 
 const AUTO = 'noteclaw-auto'; // marks the bar-1 point added automatically when the user's first point is later
 const MEDIA_EXT = /\.(mp4|m4v|mov|webm|mkv|ogv|mp3|m4a|aac|wav|ogg|oga|flac|opus)$/i;
@@ -83,7 +85,10 @@ const fmt = ms => { const s = Math.max(0, ms) / 1000; return `${Math.floor(s / 6
 
 export function initVideo({ api, editor, $, toast, togglePlay }) {
   const panel = $('videoPanel'), video = $('videoEl');
-  let media = null;       // { name, url }
+  let media = null;       // { name, url, file, audio }
+  let range = { from: 0, to: null };
+  let auto = null;        // last automatic transcription: { samples, rate, offset, notes, rhythm, title }
+  let busy = false;
   let tapping = null;     // { order, start, taps: [ms] }
   let frame = 0;
 
@@ -125,7 +130,8 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
   function attach(file) {
     if (tapping) finishTapping(false);
     if (media) URL.revokeObjectURL(media.url);
-    media = { name: file.name, url: URL.createObjectURL(file) };
+    media = { name: file.name, url: URL.createObjectURL(file), file, audio: null };
+    range = { from: 0, to: null }; auto = null; renderRange(); $('vAutoResult').hidden = true;
     video.src = media.url;
     panel.classList.toggle('audio-only', /^audio\//.test(file.type) || /\.(mp3|m4a|aac|wav|ogg|oga|flac|opus)$/i.test(file.name));
     $('videoName').textContent = file.name;
@@ -210,6 +216,89 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
     toast('已清除對齊，第 1 小節回到影片開頭');
   }
 
+  // ---- automatic transcription of a stretch of the video ----
+  const AUDIO_RATE = 22050;
+  const clock = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  function renderRange() {
+    $('vFromText').textContent = clock(range.from);
+    $('vToText').textContent = range.to === null ? '結尾' : clock(range.to);
+  }
+  function setRange(which) {
+    const t = video.currentTime;
+    if (which === 'from') { range.from = t; if (range.to !== null && range.to <= t + 1) range.to = null; }
+    else range.to = t > range.from + 1 ? t : null;
+    renderRange();
+  }
+  async function decodeAudio() {
+    if (media.audio) return media.audio;
+    const ctx = new OfflineAudioContext(1, 1, AUDIO_RATE); // decoding resamples to the context's rate
+    const buf = await ctx.decodeAudioData(await media.file.arrayBuffer());
+    const mono = new Float32Array(buf.length);
+    for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) mono[i] += d[i] / buf.numberOfChannels; }
+    media.audio = mono;
+    return mono;
+  }
+  const status = text => { $('videoStatus').textContent = text; };
+  async function autoTranscribe() {
+    if (busy || !media) return;
+    const end = range.to ?? (Number.isFinite(video.duration) ? video.duration : 0);
+    if (end - range.from < 2) { toast('範圍太短，至少要 2 秒'); return; }
+    if (end - range.from > 240 && !confirm(`這一段有 ${Math.round((end - range.from) / 60)} 分鐘，分析會花比較久。繼續？`)) return;
+    if (editor.dirty && !confirm('自動扒譜會取代目前的譜，未儲存的修改會不見。繼續？')) return;
+    busy = true; $('vAutoBtn').disabled = true;
+    if (api.playerState === alphaTab.synth.PlayerState.Playing) api.pause();
+    try {
+      status('讀取影片的聲音…');
+      const audio = await decodeAudio();
+      const samples = audio.subarray(Math.floor(range.from * AUDIO_RATE), Math.min(audio.length, Math.ceil(end * AUDIO_RATE)));
+      const { transcribePoly } = await import('../audio/poly.js');
+      const notes = await transcribePoly(samples, AUDIO_RATE, {
+        model: `${import.meta.env.BASE_URL}basic-pitch/model.json`, lowest: 28, highest: 96,
+        onProgress: f => status(`聽音符中… ${Math.round(f * 100)}%（${clock(end - range.from)} 的音訊）`)
+      });
+      status('找拍子和小節線…');
+      await new Promise(r => setTimeout(r, 0));
+      const rhythm = analyseRhythm(samples, AUDIO_RATE, notes);
+      auto = { samples, rate: AUDIO_RATE, offset: range.from, notes, rhythm, title: media.name.replace(/\.[^.]+$/, '') };
+      buildScore(true);
+    } catch (err) {
+      console.error(err);
+      toast(`自動扒譜失敗：${err.message || err}`);
+      renderStatus();
+    } finally { busy = false; $('vAutoBtn').disabled = false; }
+  }
+  /** Write the score from the last analysis (again, after the bar lines or tempo were corrected). */
+  function buildScore(first = false) {
+    if (!auto) return;
+    let out;
+    try { out = videoScore(auto.notes, auto.rhythm, { offset: auto.offset, title: auto.title }); }
+    catch (err) { toast(err.message); renderStatus(); return; }
+    const importer = new alphaTab.importer.AlphaTexImporter();
+    importer.initFromString(out.tex, api.settings);
+    const score = importer.readScore();
+    const fresh = out.bars.slice(0, score.masterBars.length).map((t, k) => ({ bar: k, occ: 0, ms: t * 1000 }));
+    writePoints(score, api.settings, [], fresh);
+    editor.load(score);
+    video.currentTime = Math.max(0, out.bars[0] - 0.3);
+    $('vAutoResult').hidden = false;
+    $('vAutoInfo').textContent = `♩=${out.bpm} · ${score.masterBars.length} 小節`;
+    renderStatus();
+    if (first) toast(`寫好了：${out.notes} 個音、${score.masterBars.length} 小節，每小節都已經對齊影片。這是草稿：音高是聽出來的，弦格、節奏細節和技巧請校對。小節線位置不對的話，用「← 一拍 / 一拍 →」或「這裡是第一拍」修正。`);
+  }
+  function shiftDownbeat(beats) { if (!auto) return; auto.rhythm.downbeat += beats; buildScore(); }
+  function downbeatHere() {
+    if (!auto) return;
+    const beat = Math.round(timeToBeat(video.currentTime - auto.offset, auto.rhythm.beats));
+    auto.rhythm.downbeat = beat;
+    buildScore();
+    toast('小節線已對齊到這一拍');
+  }
+  function retempo(factor) {
+    if (!auto) return;
+    auto.rhythm = analyseRhythm(auto.samples, auto.rate, auto.notes, { bpm: auto.rhythm.bpm * factor });
+    buildScore();
+  }
+
   function flash() { const b = $('vTapBtn'); b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit'); }
   function renderStatus() {
     if (!media) return;
@@ -244,6 +333,14 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
   $('vMarkBtn').onclick = () => markHere();
   $('vTapStartBtn').onclick = () => (tapping ? finishTapping() : startTapping());
   $('vTapBtn').onpointerdown = e => { e.preventDefault(); tap(); };
+  $('vFromBtn').onclick = () => setRange('from');
+  $('vToBtn').onclick = () => setRange('to');
+  $('vAutoBtn').onclick = () => autoTranscribe();
+  $('vBeatEarlierBtn').onclick = () => shiftDownbeat(-1);
+  $('vBeatLaterBtn').onclick = () => shiftDownbeat(1);
+  $('vBarHereBtn').onclick = () => downbeatHere();
+  $('vDoubleBtn').onclick = () => retempo(2);
+  $('vHalfBtn').onclick = () => retempo(0.5);
   $('vEarlierBtn').onclick = () => shiftAll(-50);
   $('vLaterBtn').onclick = () => shiftAll(50);
   $('vClearBtn').onclick = () => clearAll();

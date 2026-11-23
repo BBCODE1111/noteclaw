@@ -276,6 +276,20 @@
     </header>
     <video id="videoEl" playsinline preload="auto"></video>
     <div class="video-tools">
+      <div class="video-row auto-row">
+        <span class="video-label">扒譜</span>
+        <button id="vFromBtn" class="vb" title="把影片現在的位置設成起點">起 <b id="vFromText">0:00</b></button>
+        <button id="vToBtn" class="vb" title="把影片現在的位置設成終點">終 <b id="vToText">結尾</b></button>
+        <button id="vAutoBtn" class="vb strong" title="自動聽出這一段的音符和拍子，寫成譜，並和影片對齊">自動扒譜</button>
+      </div>
+      <div id="vAutoResult" class="video-row" hidden>
+        <span id="vAutoInfo" class="video-label"></span>
+        <button id="vBeatEarlierBtn" class="vb" title="小節線往前移一拍">← 一拍</button>
+        <button id="vBeatLaterBtn" class="vb" title="小節線往後移一拍">一拍 →</button>
+        <button id="vBarHereBtn" class="vb" title="把影片停在某小節的第一拍上，再按這個，小節線就會對到這裡">這裡是第一拍</button>
+        <button id="vDoubleBtn" class="vb" title="速度加倍">×2</button>
+        <button id="vHalfBtn" class="vb" title="速度減半">÷2</button>
+      </div>
       <div class="video-row">
         <span class="video-label">對齊</span>
         <button id="vBackBtn" class="vb" title="影片倒退 0.05 秒">◀ 0.05</button>
@@ -302,6 +316,7 @@
       <p><b>改譜：</b>在六線譜上點一下放游標，用方向鍵移動，直接打數字輸入格數。同一拍在別條弦打數字就是和弦。工具列或快捷鍵可以改時值、加演奏技巧、增刪小節。拍數不對的小節會標成紅色。</p>
       <p><b>曲目與軌道：</b>左側可以改曲名、速度、調性、拍號，切換軌道、換音色、加吉他或貝斯軌。工具列可以選擇顯示六線譜、五線譜、簡譜（可複選），以及在游標那一拍上方寫和弦名稱或文字註記。</p>
       <p><b>播放：</b>空白鍵播放／暫停，譜面會跟著捲動。按停止後，下次會從游標所在的位置開始播放。</p>
+      <p><b>影片自動扒譜：</b>放入影片後，在影片視窗用「起／終」選要扒的段落（停在想要的位置再按；不選就是整支影片），按「自動扒譜」。會自動聽出音符、速度和小節線，寫成譜，並把每個小節對齊影片。這是草稿：音高是聽出來的，弦格、節奏和技巧請校對；有伴奏的影片會盡量只留主奏。小節線如果偏了，用「← 一拍／一拍 →」，或把影片停在某小節第一拍按「這裡是第一拍」；速度抓成一半或兩倍時按「×2／÷2」。</p>
       <p><b>影片同步：</b>按下方「影片」（或把影片／錄音檔拖進視窗）放入自己的影片，之後播放時聲音來自影片，譜跟著影片走，速度滑桿可以放慢影片。對齊方法：把游標放在某小節，影片停在那小節第一拍，按「這裡是第 N 小節開頭」；或按「邊聽邊點」，影片播放時每小節第一拍按一下 M 鍵。「整體提早／延後」每次微調 0.05 秒。對齊點會存進專案檔，影片本身不會存，下次開專案再放入同一個影片即可。</p>
       <p><b>循環練習：</b>把游標放在起點小節按 A，放在終點小節按 B，就會循環這一段。</p>
       <p><b>快捷鍵：</b>方向鍵移動游標 · 0–9 輸入格數（簡譜模式是 1–7，鼓組是鼓點）· ] [ 升降半音 · ⇧↑ ⇧↓ 八度 · −／＝ 時值變長／變短 · <kbd>.</kbd> 附點 · <kbd>/</kbd> 三連音 · R 休止 · ⌫ 刪除 · ⌘C／⌘X／⌘V 複製剪下貼上 · ⌘Z／⇧⌘Z 復原／重做 · 空白鍵播放。</p>

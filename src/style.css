@@ -308,3 +308,6 @@ textarea { flex: 1; min-height: 260px; width: 100%; resize: vertical; background
 .video-status { margin: 0; font-size: 12px; line-height: 1.45; color: var(--dim); }
 .video-panel.tapping { outline: 3px solid var(--accent); outline-offset: 2px; }
 body.has-video #videoBtn { background: var(--accent); color: var(--on-accent); }
+.vb b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.vb:disabled { opacity: .5; cursor: default; }
+.auto-row { padding-bottom: 6px; border-bottom: 1px dashed var(--faint); }

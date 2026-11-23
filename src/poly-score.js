@@ -51,7 +51,7 @@ export function groupChords(notes, { origin, unit, strum = 0.06 }) {
  * Every way to play a set of pitches at once: one note per string, lower notes on lower strings, and all
  * fretted notes within a four-fret hand span. Cheapest shapes first.
  */
-export function chordShapes(pitches, { tuning = OPEN_STRINGS, maxFret = 19, limit = 10 } = {}) {
+export function chordShapes(pitches, { tuning = OPEN_STRINGS, maxFret = 19, limit = 10, lead = false } = {}) {
   const options = pitches.map(p => possiblePositions(p, maxFret, tuning));
   const out = [];
   const walk = (i, used, lastString) => {
@@ -61,7 +61,9 @@ export function chordShapes(pitches, { tuning = OPEN_STRINGS, maxFret = 19, limi
       // Four fingers: a barre lets one finger hold several strings at the lowest fret.
       const fingers = fretted.filter(f => f !== low).length + (fretted.length ? 1 : 0);
       if (fingers > 4) return;
-      out.push({ notes: used.map((u, k) => ({ ...u, pitch: pitches[k] })), hand: low, cost: span * 0.5 + low * 0.06 + fingers * 0.1 });
+      // Lead playing stays in a fretted position; an open string is the exception (except the low strings).
+      const open = lead ? used.filter((u, k) => u.fret === 0 && pitches[k] > tuning[1]).length : 0;
+      out.push({ notes: used.map((u, k) => ({ ...u, pitch: pitches[k] })), hand: low, cost: span * 0.5 + low * (lead ? 0.04 : 0.06) + fingers * 0.1 + open * 2 });
       return;
     }
     for (const o of options[i]) {
@@ -98,12 +100,15 @@ export function fingerChords(chords, options = {}) {
   const costs = [];
   candidates.forEach((shapes, i) => {
     costs.push(shapes.map(s => {
-      if (!i || !candidates[i - 1].length) return { cost: s.cost, prev: -1 };
-      let best = { cost: Infinity, prev: 0 };
+      if (!i || !candidates[i - 1].length) return { cost: s.cost, prev: -1, hand: s.hand };
+      let best = { cost: Infinity, prev: 0, hand: s.hand };
       candidates[i - 1].forEach((from, j) => {
-        const shift = s.hand && from.hand ? Math.abs(s.hand - from.hand) : 0;
-        const cost = costs[i - 1][j].cost + s.cost + (shift ? 0.5 + shift * 0.35 : 0);
-        if (cost < best.cost) best = { cost, prev: j };
+        // An open-string shape leaves the hand where it was (for lead playing; chords may reset it).
+        const fromHand = options.lead ? costs[i - 1][j].hand : from.hand;
+        const shift = s.hand && fromHand ? Math.abs(s.hand - fromHand) : 0;
+        const move = !shift ? 0 : options.lead ? (shift <= 2 ? 0.3 * shift : 1 + shift * 0.5) : 0.5 + shift * 0.35;
+        const cost = costs[i - 1][j].cost + s.cost + move;
+        if (cost < best.cost) best = { cost, prev: j, hand: s.hand || fromHand };
       });
       return best;
     }));
@@ -133,12 +138,12 @@ export const GM_DRUM_NAMES = {
   53: 'Ride (bell)', 54: 'Tambourine (hit)', 55: 'Splash (hit)', 56: 'Cowbell medium (hit)', 57: 'Crash medium (hit)', 59: 'Ride (middle)'
 };
 
-export function polyToAlphaTex(notes, { bpm = 110, subdivision = 16, origin, staff = 'tab', tuning = OPEN_STRINGS, maxFret = 19, title = 'Recorded', trackName = 'Guitar', timeSignature = 4, timeSignatureDenominator = 4 } = {}) {
+export function polyToAlphaTex(notes, { bpm = 110, subdivision = 16, origin, staff = 'tab', tuning = OPEN_STRINGS, maxFret = 19, title = 'Recorded', trackName = 'Guitar', timeSignature = 4, timeSignatureDenominator = 4, lead = false } = {}) {
   if (!notes.length) throw new Error('還沒有可以轉譜的音符。');
   const unit = 60 / bpm * (4 / subdivision);
   const chords = groupChords(notes, { origin, unit });
   if (!chords.length) throw new Error('預備拍結束後沒有錄到音符。');
-  const report = staff === 'tab' ? fingerChords(chords, { tuning, maxFret }) : { shapes: [], dropped: 0, simplified: 0, unplayable: 0 };
+  const report = staff === 'tab' ? fingerChords(chords, { tuning, maxFret, lead }) : { shapes: [], dropped: 0, simplified: 0, unplayable: 0 };
   const barUnits = Math.round(subdivision * timeSignature / timeSignatureDenominator);
   const tokens = timeSignature === 4 && timeSignatureDenominator === 4 ? [] : [`\\ts ${timeSignature} ${timeSignatureDenominator}`];
   let skipped = 0;
