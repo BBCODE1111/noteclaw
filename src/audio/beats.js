@@ -2,8 +2,8 @@
 // video can follow the score bar by bar.
 //
 // onsetEnvelope: how much new sound starts in each ~23 ms frame (spectral flux on a log spectrum).
-// estimateTempo: the beat period that best explains that envelope (autocorrelation with a mild preference
-//   for moderate tempos).
+// estimateTempo: the beat period that best explains that envelope (autocorrelation with a preference for
+//   60–130 bpm, where lead lines are written in 16ths; ×2 / ÷2 in the app fixes the rest)
 // trackBeats: beat times that sit on onsets while keeping a steady pulse (dynamic programming, after
 //   D. Ellis, "Beat tracking by dynamic programming", 2007). A player who drifts is followed beat by beat.
 // findDownbeat: which of the beats is "1": the one where the bass and the most notes tend to start.
@@ -79,7 +79,7 @@ function normalise(x) {
 }
 
 /** Beats per minute that best fit the envelope, between `min` and `max`. */
-export function estimateTempo(env, rate, { min = 50, max = 200, prefer = 100 } = {}) {
+export function estimateTempo(env, rate, { min = 50, max = 200, prefer = 90, spread = 0.45 } = {}) {
   const lo = Math.floor(rate * 60 / max), hi = Math.ceil(rate * 60 / min);
   const score = lag => {
     let s = 0; for (let i = lag; i < env.length; i++) s += env[i] * env[i - lag];
@@ -93,7 +93,7 @@ export function estimateTempo(env, rate, { min = 50, max = 200, prefer = 100 } =
     const at = l => (ac[Math.round(l)] ?? (Math.round(l) < ac.length ? score(Math.round(l)) : 0));
     const value = ac[lag] + 0.5 * at(lag * 2) + 0.25 * (at(lag / 2) + at(lag * 1.5));
     const bpm = 60 * rate / lag;
-    const weight = Math.exp(-0.5 * (Math.log2(bpm / prefer) / 0.9) ** 2);
+    const weight = Math.exp(-0.5 * (Math.log2(bpm / prefer) / spread) ** 2);
     if (value * weight > best.value) best = { bpm, value: value * weight, lag };
   }
   // Refine between whole frames.
@@ -138,22 +138,28 @@ export function trackBeats(env, rate, bpm, { tightness = 100 } = {}) {
  * Index (0…beatsPerBar-1) of the first beat that is a "1". Chords change most often on the downbeat, so a
  * new bass note weighs most; bass attacks and note starts in general help when there is no bass.
  */
-export function findDownbeat(beats, { low, env, rate }, notes = [], beatsPerBar = 4) {
-  const scores = phaseScores(beats, { low, env, rate }, notes, beatsPerBar);
+export function findDownbeat(beats, { low, env, rate }, notes = [], beatsPerBar = 4, weights) {
+  const scores = phaseScores(beats, { low, env, rate }, notes, beatsPerBar, weights);
   return scores.indexOf(Math.max(...scores));
 }
-export function phaseScores(beats, { low, env, rate }, notes = [], beatsPerBar = 4) {
+// Tuned on 40 transcribed solos over band backings (tools/bench.mjs): the loudness of the beat itself misleads
+// (snare backbeats), the bass changing note and lead notes starting on the beat do not.
+export const DOWNBEAT_WEIGHTS = { change: 3, low: 0.1, env: 0, notes: 0.15, probe: 0.45 };
+export function phaseScores(beats, { low, env, rate }, notes = [], beatsPerBar = 4, weights = {}) {
+  const W = { ...DOWNBEAT_WEIGHTS, ...weights };
   const at = (arr, t) => { const i = Math.round(t * rate); let m = 0; for (let k = i - 2; k <= i + 2; k++) m = Math.max(m, arr[k] ?? 0); return m; };
-  // Bass line: the lowest note sounding, sampled on each beat; a change of bass note marks a chord change.
-  const bassAt = t => { let best = null; for (const n of notes) if (n.pitch < 52 && n.start <= t + 0.08 && n.end > t + 0.1 && (!best || n.pitch < best.pitch)) best = n; return best?.pitch ?? null; };
+  // Bass line: the lowest note sounding a little after each beat (the model reports low notes late, so
+  // sampling right on the beat would see a chord change one beat after it happens).
+  const bassAt = t => { let best = null; for (const n of notes) if (n.pitch < 52 && n.start <= t && n.end > t && (!best || n.pitch < best.pitch)) best = n; return best?.pitch ?? null; };
   const scores = Array(beatsPerBar).fill(0);
   let lastBass = null;
   beats.forEach((t, i) => {
+    const len = (beats[i + 1] ?? t + (t - (beats[i - 1] ?? t - 0.6))) - t;
     const near = notes.filter(n => Math.abs(n.start - t) < 0.07);
-    const bass = bassAt(t);
+    const bass = bassAt(t + W.probe * len);
     const change = bass !== null && lastBass !== null && bass % 12 !== lastBass % 12;
     if (bass !== null) lastBass = bass;
-    scores[i % beatsPerBar] += 3 * (change ? 1 : 0) + 0.5 * at(low, t) + 0.2 * at(env, t) + 0.15 * near.length;
+    scores[i % beatsPerBar] += W.change * (change ? 1 : 0) + W.low * at(low, t) + W.env * at(env, t) + W.notes * near.length;
   });
   return scores;
 }

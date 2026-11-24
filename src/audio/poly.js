@@ -52,7 +52,7 @@ let cached = null;
  * @param {(fraction:number)=>void} [o.onProgress]
  * @returns {Promise<{pitch:number,start:number,end:number,level:number}[]>}
  */
-export async function transcribePoly(samples, sampleRate, { model, onProgress = () => {}, lowest = 21, highest = 108 } = {}) {
+export async function transcribePoly(samples, sampleRate, { model, onProgress = () => {}, lowest = 21, highest = 108, onsetThreshold = 0.5, frameThreshold = 0.3, onFallback = () => {} } = {}) {
   const mod = await import('@spotify/basic-pitch');
   const api = mod.BasicPitch ? mod : mod.default;
   if (!cached || cached.source !== model) cached = { source: model, basic: new api.BasicPitch(model) };
@@ -61,9 +61,22 @@ export async function transcribePoly(samples, sampleRate, { model, onProgress = 
   let peak = 0; for (let i = 0; i < audio.length; i++) peak = Math.max(peak, Math.abs(audio[i]));
   const gain = peak > 0.001 ? Math.min(40, 0.8 / peak) : 1;
   const scaled = gain === 1 ? audio : audio.map(v => v * gain);
-  const frames = [], onsets = [], contours = [];
-  await cached.basic.evaluateModel(scaled, (f, o, c) => { frames.push(...f); onsets.push(...o); contours.push(...c); }, onProgress);
-  const events = api.noteFramesToTime(api.outputToNotesPoly(frames, onsets, 0.5, 0.3, 5));
+  let frames = [], onsets = [], contours = [];
+  const run = () => cached.basic.evaluateModel(scaled, (f, o, c) => { frames.push(...f); onsets.push(...o); contours.push(...c); }, onProgress);
+  try { await run(); }
+  catch (err) {
+    // Some graphics drivers fail to compile one of TensorFlow's WebGL shaders for certain audio lengths.
+    // The CPU backend is slower but always works: switch to it and start over.
+    const tf = await import('@tensorflow/tfjs');
+    if (tf.getBackend() === 'cpu') throw err;
+    console.warn('Basic Pitch on WebGL failed, retrying on the CPU', err);
+    onFallback();
+    await tf.setBackend('cpu');
+    cached = { source: model, basic: new api.BasicPitch(model) };
+    frames = []; onsets = []; contours = [];
+    await run();
+  }
+  const events = api.noteFramesToTime(api.outputToNotesPoly(frames, onsets, onsetThreshold, frameThreshold, 5));
   return cleanPolyNotes(events.map(e => ({ pitch: e.pitchMidi, start: e.startTimeSeconds, end: e.startTimeSeconds + e.durationSeconds, level: e.amplitude })))
     .filter(n => n.pitch >= lowest && n.pitch <= highest);
 }

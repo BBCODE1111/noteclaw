@@ -252,9 +252,13 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
       const audio = await decodeAudio();
       const samples = audio.subarray(Math.floor(range.from * AUDIO_RATE), Math.min(audio.length, Math.ceil(end * AUDIO_RATE)));
       const { transcribePoly } = await import('../audio/poly.js');
+      let slow = false;
       const notes = await transcribePoly(samples, AUDIO_RATE, {
         model: `${import.meta.env.BASE_URL}basic-pitch/model.json`, lowest: 28, highest: 96,
-        onProgress: f => status(`聽音符中… ${Math.round(f * 100)}%（${clock(end - range.from)} 的音訊）`)
+        // Tuned on band recordings with known tabs (tools/bench.mjs): fewer false notes, about as many found.
+        onsetThreshold: 0.65, frameThreshold: 0.2,
+        onProgress: f => status(`聽音符中… ${Math.round(f * 100)}%（${clock(end - range.from)} 的音訊）${slow ? '・顯示卡加速失敗，改用 CPU，會慢一點' : ''}`),
+        onFallback: () => { slow = true; }
       });
       status('找拍子和小節線…');
       await new Promise(r => setTimeout(r, 0));

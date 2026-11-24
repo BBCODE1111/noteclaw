@@ -27,11 +27,11 @@ export function leadNotes(notes, { lowest = 40, highest = 88, span = 9, strum = 
 }
 
 /** Tempo, beat times and the first downbeat of a recording. */
-export function analyseRhythm(samples, sampleRate, notes = [], { bpm, beatsPerBar = 4 } = {}) {
+export function analyseRhythm(samples, sampleRate, notes = [], { bpm, beatsPerBar = 4, tempo: tempoOptions, downbeat: downbeatWeights } = {}) {
   const envelope = onsetEnvelope(samples, sampleRate);
-  const tempo = bpm || estimateTempo(envelope.env, envelope.rate);
+  const tempo = bpm || estimateTempo(envelope.env, envelope.rate, tempoOptions);
   const beats = trackBeats(envelope.env, envelope.rate, tempo);
-  const downbeat = findDownbeat(beats, envelope, notes, beatsPerBar);
+  const downbeat = findDownbeat(beats, envelope, notes, beatsPerBar, downbeatWeights);
   return { bpm: tempo, beats, downbeat, beatsPerBar };
 }
 
@@ -43,6 +43,37 @@ export function beatTime(i, beats) {
   if (i >= n - 1) return beats[n - 1] + (i - n + 1) * (beats[n - 1] - beats[n - 2]);
   const k = Math.floor(i);
   return beats[k] + (i - k) * (beats[k + 1] - beats[k]);
+}
+
+/**
+ * How late the second 16th of each eighth comes, as a fraction of a beat (0.25 = straight, ~0.33 = triplet
+ * swing). Measured from notes that start between the eighth-note grid points.
+ */
+export function estimateSwing(positions) {
+  const mid = positions.map(b => ((b % 0.5) + 0.5) % 0.5).filter(f => f > 0.15 && f < 0.42).sort((a, b) => a - b);
+  if (mid.length < 6) return 0.25;
+  const median = mid[Math.floor(mid.length / 2)];
+  return Math.min(0.38, Math.max(0.25, median));
+}
+/** Undo swing: move a beat position so swung 16ths land on the straight grid the score is written on. */
+export function deswing(beat, swing) {
+  if (swing <= 0.26) return beat;
+  const half = Math.floor(beat * 2) / 2, f = beat - half;
+  return half + (f < swing ? f * 0.25 / swing : 0.25 + (f - swing) * 0.25 / (0.5 - swing));
+}
+/**
+ * Note times as beat positions from `startBeat` (swing removed), then as seconds at the written tempo.
+ * Shared by the score writer and the accuracy check (tools/bench.mjs).
+ */
+export function warpNotes(notes, rhythm, startBeat, { swing = true } = {}) {
+  const pos = t => timeToBeat(t, rhythm.beats) - startBeat;
+  const s = swing ? estimateSwing(notes.map(n => pos(n.start))) : 0.25;
+  const sec = 60 / Math.round(rhythm.bpm);
+  const notesOut = notes.map(n => {
+    const start = deswing(pos(n.start), s), end = Math.max(deswing(pos(n.end), s), start + 0.05);
+    return { ...n, start: start * sec, end: end * sec };
+  });
+  return { notes: notesOut, swing: s };
 }
 
 /**
@@ -59,10 +90,8 @@ export function videoScore(notes, rhythm, { offset = 0, lead = true, title = 'Vi
   const position = t => timeToBeat(t, beats) - rhythm.downbeat;
   const firstBar = Math.floor((position(used[0].start) + 0.125) / beatsPerBar);
   const startBeat = rhythm.downbeat + firstBar * beatsPerBar;
-  const beatSeconds = 60 / bpm;
-  const warp = t => (timeToBeat(t, beats) - startBeat) * beatSeconds;
-  const warped = used.map(n => ({ ...n, start: warp(n.start), end: Math.max(warp(n.end), warp(n.start) + 0.02) }));
-  const out = polyToAlphaTex(warped, { bpm, origin: 0, staff: 'tab', tuning, maxFret, title, trackName, timeSignature: beatsPerBar, lead });
+  const warped = warpNotes(used, rhythm, startBeat).notes;
+  const out = polyToAlphaTex(warped, { bpm, origin: 0, staff: 'tab', tuning, maxFret, title, trackName, timeSignature: beatsPerBar, lead, grid: 'mixed' });
   const barCount = (out.tex.match(/\|/g) ?? []).length + 1;
   const bars = Array.from({ length: barCount }, (_, k) => offset + beatTime(startBeat + k * beatsPerBar, beats));
   return { tex: out.tex, bars, notes: used.length, bpm, dropped: out.dropped };

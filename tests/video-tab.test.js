@@ -65,3 +65,19 @@ test('lead notes keep the melody and double stops, drop the band underneath', ()
   ]).map(n => n.pitch);
   assert.deepEqual(kept, [69, 74, 71]);
 });
+
+test('a beat of 16th-note triplets is written as triplets, the straight beats as 16ths', async () => {
+  const at = await import('@coderline/alphatab');
+  const { polyToAlphaTex } = await import('../src/poly-score.js');
+  const sec = 60 / 90, n = (beat, pitch) => ({ pitch, start: beat * sec, end: beat * sec + sec / 7, level: 0.8 });
+  const notes = [n(0, 64), n(0.25, 65), n(0.5, 67), n(0.75, 69), // beat 1: straight 16ths
+    ...[0, 1, 2, 3, 4, 5].map(k => n(1 + k / 6 + 0.01, 60 + k)), // beat 2: six 16th triplets
+    n(2, 72), n(3, 71)];
+  const { tex } = polyToAlphaTex(notes, { bpm: 90, origin: 0, grid: 'mixed', lead: true, maxFret: 22 });
+  assert.equal((tex.match(/\{tu 3\}/g) ?? []).length, 6);
+  const imp = new at.importer.AlphaTexImporter(); imp.initFromString(tex, new at.Settings());
+  const bar = imp.readScore().tracks[0].staves[0].bars[0];
+  assert.equal(bar.voices[0].beats.reduce((x, b) => x + b.playbackDuration, 0), 3840);
+  const starts = bar.voices[0].beats.filter(b => !b.isRest).map(b => b.playbackStart / 960);
+  assert.deepEqual(starts.slice(0, 10).map(x => +x.toFixed(3)), [0, 0.25, 0.5, 0.75, 1, 1.167, 1.333, 1.5, 1.667, 1.833]);
+});

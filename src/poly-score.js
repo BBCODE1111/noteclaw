@@ -9,7 +9,7 @@ const noteName = midi => `${NOTE[midi % 12]}${Math.floor(midi / 12) - 1}`;
  * Gather notes that start together (a strum is spread over a few tens of milliseconds) into chords and put
  * them on the grid. One chord per grid step; each lasts until the next chord, or until its notes stop.
  */
-export function groupChords(notes, { origin, unit, strum = 0.06 }) {
+export function groupChords(notes, { origin, unit, strum = 0.06, quantize, snapEnd } = {}) {
   const sorted = [...notes].sort((a, b) => a.start - b.start);
   const clusters = [];
   for (const n of sorted) {
@@ -29,7 +29,7 @@ export function groupChords(notes, { origin, unit, strum = 0.06 }) {
   }
   const base = origin ?? clusters[0]?.start ?? 0;
   const kept = clusters.filter(c => c.start - base > -unit / 2);
-  const steps = quantizeStarts(kept.map(c => c.start), base, unit);
+  const steps = quantize ? kept.map(c => quantize(c.start - base)) : quantizeStarts(kept.map(c => c.start), base, unit);
   const chords = [];
   kept.forEach((c, i) => {
     const prev = chords[chords.length - 1];
@@ -42,16 +42,51 @@ export function groupChords(notes, { origin, unit, strum = 0.06 }) {
     const ringsOn = next && next.start - c.end < Math.max(unit * 0.6, 0.12);
     const own = Math.max(1, Math.round(Math.max(c.end - c.start, unit * 0.8) / unit));
     c.length = next ? (ringsOn ? next.step - c.step : Math.min(own, next.step - c.step)) : own;
+    if (snapEnd) c.length = Math.max(1, Math.min(snapEnd(c.step + c.length, c.step) - c.step, next ? next.step - c.step : Infinity));
     c.pitches = [...new Set(c.notes.map(n => n.pitch))].sort((a, b) => a - b);
   });
   return chords;
+}
+
+/** Grid ticks per beat in the mixed grid: 3 per straight 16th, 2 per 16th-note triplet. */
+export const TICKS = 12;
+/**
+ * Choose, beat by beat, whether the notes in it are straight 16ths or 16th-note triplets (only when the
+ * triplet grid fits clearly better), and return how to place a start time (seconds from beat one) on that grid.
+ */
+export function mixedGrid(starts, beatSeconds, { bias = 0.6 } = {}) {
+  const byBeat = new Map();
+  for (const t of starts) {
+    const b = t / beatSeconds, i = Math.floor(b + 1 / 24);
+    if (!byBeat.has(i)) byBeat.set(i, []);
+    byBeat.get(i).push(b - i);
+  }
+  const triplet = new Set();
+  const err = (fr, div) => fr.reduce((sum, f) => sum + Math.abs(f - Math.round(f * div) / div), 0);
+  for (const [i, fr] of byBeat) {
+    const off = fr.filter(f => Math.abs(f * 4 - Math.round(f * 4)) > 0.22).length;
+    if (fr.length >= 2 && off >= 1 && err(fr, 6) < bias * err(fr, 4)) triplet.add(i);
+  }
+  const quantize = t => {
+    const b = Math.max(0, t / beatSeconds), i = Math.floor(b + 1 / 24), div = triplet.has(i) ? 6 : 4;
+    return Math.max(0, Math.round(Math.round((b - i) * div) / div * TICKS) + i * TICKS);
+  };
+  // A note ends on the grid of the beat it ends in.
+  const snapEnd = (end, start) => {
+    const i = Math.floor(end / TICKS), g = triplet.has(i) ? 2 : 3, r = Math.round((end - i * TICKS) / g) * g + i * TICKS;
+    return Math.max(r, start + (triplet.has(Math.floor(start / TICKS)) ? 2 : 3));
+  };
+  return { triplet, quantize, snapEnd };
 }
 
 /**
  * Every way to play a set of pitches at once: one note per string, lower notes on lower strings, and all
  * fretted notes within a four-fret hand span. Cheapest shapes first.
  */
-export function chordShapes(pitches, { tuning = OPEN_STRINGS, maxFret = 19, limit = 10, lead = false } = {}) {
+/** Lead-playing preferences (tuned on transcribed solos with known fingering; see tools/bench.mjs). */
+export const LEAD_COST = { fret: 0.04, zoneLo: 5, zoneHi: 15, zone: 0.15, top: 0.3, open: 2, skip: 0, str: 0 };
+export function chordShapes(pitches, { tuning = OPEN_STRINGS, maxFret = 19, limit = 10, lead = false, leadCost = LEAD_COST } = {}) {
+  const L = { ...LEAD_COST, ...leadCost };
   const options = pitches.map(p => possiblePositions(p, maxFret, tuning));
   const out = [];
   const walk = (i, used, lastString) => {
@@ -62,8 +97,16 @@ export function chordShapes(pitches, { tuning = OPEN_STRINGS, maxFret = 19, limi
       const fingers = fretted.filter(f => f !== low).length + (fretted.length ? 1 : 0);
       if (fingers > 4) return;
       // Lead playing stays in a fretted position; an open string is the exception (except the low strings).
-      const open = lead ? used.filter((u, k) => u.fret === 0 && pitches[k] > tuning[1]).length : 0;
-      out.push({ notes: used.map((u, k) => ({ ...u, pitch: pitches[k] })), hand: low, cost: span * 0.5 + low * (lead ? 0.04 : 0.06) + fingers * 0.1 + open * 2 });
+      let extra = low * 0.06;
+      if (lead) {
+        const open = used.filter((u, k) => u.fret === 0 && pitches[k] > tuning[1]).length;
+        const zone = !fretted.length ? 0 : low < L.zoneLo ? L.zoneLo - low : low > L.zoneHi ? low - L.zoneHi : 0;
+        const top = used.filter(u => u.string === tuning.length).length; // notes on the highest string
+        const skipped = used.length > 1 ? used[used.length - 1].string - used[0].string + 1 - used.length : 0;
+        const height = used.reduce((sum, u) => sum + u.string - 1, 0) / used.length; // 0 = low E … 5 = high e
+        extra = low * L.fret + zone * L.zone + top * L.top + open * L.open + skipped * L.skip + height * L.str;
+      }
+      out.push({ notes: used.map((u, k) => ({ ...u, pitch: pitches[k] })), hand: low, cost: span * 0.5 + fingers * 0.1 + extra });
       return;
     }
     for (const o of options[i]) {
@@ -138,17 +181,42 @@ export const GM_DRUM_NAMES = {
   53: 'Ride (bell)', 54: 'Tambourine (hit)', 55: 'Splash (hit)', 56: 'Cowbell medium (hit)', 57: 'Crash medium (hit)', 59: 'Ride (middle)'
 };
 
-export function polyToAlphaTex(notes, { bpm = 110, subdivision = 16, origin, staff = 'tab', tuning = OPEN_STRINGS, maxFret = 19, title = 'Recorded', trackName = 'Guitar', timeSignature = 4, timeSignatureDenominator = 4, lead = false } = {}) {
+export function polyToAlphaTex(notes, { bpm = 110, subdivision = 16, origin, staff = 'tab', tuning = OPEN_STRINGS, maxFret = 19, title = 'Recorded', trackName = 'Guitar', timeSignature = 4, timeSignatureDenominator = 4, lead = false, grid = null } = {}) {
   if (!notes.length) throw new Error('還沒有可以轉譜的音符。');
-  const unit = 60 / bpm * (4 / subdivision);
-  const chords = groupChords(notes, { origin, unit });
+  // grid 'mixed': straight 16ths or 16th triplets per beat (on TICKS per beat); otherwise a plain `subdivision` grid.
+  const mixed = grid === 'mixed' ? mixedGrid(notes.map(n => n.start - (origin ?? 0)), 60 / bpm) : null;
+  const unit = mixed ? 60 / bpm / TICKS : 60 / bpm * (4 / subdivision);
+  const chords = groupChords(notes, { origin, unit, ...(mixed ? { quantize: mixed.quantize, snapEnd: mixed.snapEnd } : {}) });
   if (!chords.length) throw new Error('預備拍結束後沒有錄到音符。');
   const report = staff === 'tab' ? fingerChords(chords, { tuning, maxFret, lead }) : { shapes: [], dropped: 0, simplified: 0, unplayable: 0 };
-  const barUnits = Math.round(subdivision * timeSignature / timeSignatureDenominator);
+  const barUnits = mixed ? TICKS * timeSignature * 4 / timeSignatureDenominator : Math.round(subdivision * timeSignature / timeSignatureDenominator);
   const tokens = timeSignature === 4 && timeSignatureDenominator === 4 ? [] : [`\\ts ${timeSignature} ${timeSignatureDenominator}`];
   let skipped = 0;
   let at = 0;
-  const put = (first, rest, units) => {
+  const put = (first, rest, units) => mixed ? putMixed(first, rest, units) : putPlain(first, rest, units);
+  // Mixed grid: in a triplet beat write 16th / 8th triplets that stay inside the beat; elsewhere straight
+  // values (in ticks: 16th 3, 8th 6, quarter 12, half 24, whole 48) that never run into a triplet beat.
+  const putMixed = (first, rest, units) => {
+    let remaining = units, token = first;
+    while (remaining > 0) {
+      const beat = Math.floor(at / TICKS), inBeat = at - beat * TICKS;
+      let chunk, value, tu = '';
+      if (mixed.triplet.has(beat)) {
+        const max = Math.min(remaining, TICKS - inBeat);
+        chunk = max >= 4 && inBeat % 4 === 0 ? 4 : max >= 2 ? 2 : max; value = chunk === 4 ? 8 : 16; tu = ' {tu 3}';
+        if (chunk < 2) { chunk = max; value = 32; tu = ' {tu 3}'; } // leftover tick after rounding
+      } else {
+        let max = Math.min(remaining, barUnits - at % barUnits);
+        for (let b = beat + 1; b * TICKS < at + max; b++) if (mixed.triplet.has(b)) { max = b * TICKS - at; break; }
+        chunk = [48, 24, 12, 6, 3].find(v => v <= max && at % v === 0) ?? (max >= 3 ? 3 : max);
+        value = { 48: 1, 24: 2, 12: 4, 6: 8, 3: 16 }[chunk] ?? 32;
+      }
+      tokens.push(`${token}.${value}${tu}`);
+      token = rest; at += chunk; remaining -= chunk;
+      if (at % barUnits === 0) tokens.push('|');
+    }
+  };
+  const putPlain = (first, rest, units) => {
     let remaining = units, token = first;
     const sizes = [16, 8, 4, 2, 1].filter(v => v <= barUnits);
     while (remaining > 0) {
