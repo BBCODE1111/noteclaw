@@ -3,6 +3,7 @@ import '@fontsource/luckiest-guy/latin-400.css';
 import { midiName } from './fingering.js';
 import { DRUM_KIT, setKeySignature } from './editor/ops.ts';
 import { initLive } from './ui/live.js';
+import { initMidiInput } from './ui/midi-in.js';
 import { midiToAlphaTex } from './midi-import.js';
 import { TabEditor } from './editor/editor.ts';
 import { mountIcons } from './ui/icons.js';
@@ -254,6 +255,9 @@ initLive({
     showToast(`已產生 ${notes.length} 個音符的譜。${warning || '音高是實測的，弦、格和技巧是推測的，請校對。'}`);
   }
 });
+// MIDI keyboard / guitar: same hand-off as a recording (the score replaces the current one).
+const midiInput = initMidiInput({ $, toast: showToast, setStatus, hasScore: () => !!api.score,
+  onTex: (tex, notes, note) => { $('alphaTexInput').value = tex; fileName = 'MIDI.gp'; currentTrack = 0; editor.cursor.track = 0; api.tex(tex); setView('score'); showToast(`已產生 ${notes.length} 個音符的譜。${note}`); } });
 // Narrow windows: the side panel (song, key, tracks, tuning, export) opens as a drawer.
 $('panelBtn').onclick = () => { document.body.classList.toggle('panel-open'); $('panelBtn').classList.toggle('on', document.body.classList.contains('panel-open')); };
 document.addEventListener('pointerdown', e => {
@@ -274,4 +278,4 @@ $('alphaTexInput').value=SAMPLE;
 api.tex(SAMPLE);
 
 // Debug handle, development server only.
-if (import.meta.env.DEV) window.__gs = { api, alphaTab, editor, openFile, video };
+if (import.meta.env.DEV) window.__gs = { api, alphaTab, editor, openFile, video, midiInput };

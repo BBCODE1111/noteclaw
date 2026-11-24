@@ -177,3 +177,10 @@ export function timeToBeat(t, beats) {
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (beats[m] <= t) lo = m; else hi = m; }
   return lo + (t - beats[lo]) / (beats[hi] - beats[lo]);
 }
+
+/** Tempo implied by tracked beats (median beat length), more exact than the first estimate. */
+export function beatsTempo(beats, fallback) {
+  const d = beats.slice(1).map((b, i) => b - beats[i]).sort((a, b) => a - b);
+  return d.length >= 4 ? 60 / d[d.length >> 1] : fallback;
+}
+

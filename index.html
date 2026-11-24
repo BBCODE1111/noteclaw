@@ -207,6 +207,14 @@
             <button id="saveTakeBtn" class="btn wide" disabled title="把剛剛錄的原始聲音存成 WAV 檔">儲存這次錄音（WAV）</button>
           </section>
           <section class="card">
+            <h3>MIDI 輸入</h3>
+            <p class="hint">接上 MIDI 鍵盤或 MIDI 吉他，按開始後自由彈，按停止就自動抓速度、小節線和音高，寫成譜。樂器用上面「樂器」的選擇。需要 Chrome 或 Edge。</p>
+            <label class="field">MIDI 裝置<select id="midiDevice"><option value="">所有 MIDI 裝置</option></select></label>
+            <label class="check"><input id="midiUseBpm" type="checkbox"/> 速度用「速度 BPM」欄的設定（跟節拍器彈時勾選；不勾就自動偵測）</label>
+            <div class="pitch-display"><span>最近的音</span><div id="midiNote">—</div><small id="midiInfo">按「開始 MIDI 錄製」後顯示</small></div>
+            <div class="record-actions"><button id="midiRecBtn" class="btn record">● 開始 MIDI 錄製</button><button id="midiStopBtn" class="btn" disabled>■ 停止並寫譜</button></div>
+          </section>
+          <section class="card">
             <h3>節拍與轉譜</h3>
             <div class="field-row">
               <label class="field">速度 BPM<input id="transcribeBpm" type="number" min="40" max="250" value="110"/></label>

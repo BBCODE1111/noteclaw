@@ -5,7 +5,7 @@
 //    is followed beat by beat instead of drifting off a fixed metronome.
 // 3. Note times are re-expressed in beats ("warped"), so the existing score writer can put them on a
 //    steady grid, and every bar line gets the video time where that bar really starts (sync points).
-import { onsetEnvelope, estimateTempo, trackBeats, findDownbeat, timeToBeat } from './beats.js';
+import { onsetEnvelope, estimateTempo, trackBeats, findDownbeat, timeToBeat, beatsTempo } from './beats.js';
 import { polyToAlphaTex } from '../poly-score.js';
 import { OPEN_STRINGS } from '../fingering.js';
 
@@ -32,7 +32,7 @@ export function analyseRhythm(samples, sampleRate, notes = [], { bpm, beatsPerBa
   const tempo = bpm || estimateTempo(envelope.env, envelope.rate, tempoOptions);
   const beats = trackBeats(envelope.env, envelope.rate, tempo);
   const downbeat = findDownbeat(beats, envelope, notes, beatsPerBar, downbeatWeights);
-  return { bpm: tempo, beats, downbeat, beatsPerBar };
+  return { bpm: bpm || beatsTempo(beats, tempo), beats, downbeat, beatsPerBar };
 }
 
 /** Time of beat `i` (fractional and out-of-range indexes extrapolate at the nearest beat length). */
@@ -81,17 +81,17 @@ export function warpNotes(notes, rhythm, startBeat, { swing = true } = {}) {
  * are the video times at which each written bar starts.
  * @returns {{tex:string, bars:number[], notes:number, bpm:number, dropped:number}}
  */
-export function videoScore(notes, rhythm, { offset = 0, lead = true, title = 'Video', trackName = 'Guitar', tuning = OPEN_STRINGS, maxFret = 22 } = {}) {
+export function videoScore(notes, rhythm, { offset = 0, lead = true, title = 'Video', trackName = 'Guitar', tuning = OPEN_STRINGS, maxFret = 22, staff = 'tab', leadCost } = {}) {
   const { beats, beatsPerBar } = rhythm;
   const bpm = Math.round(rhythm.bpm);
-  const used = lead ? leadNotes(notes) : notes.filter(n => n.pitch >= tuning[0] && n.pitch <= tuning[tuning.length - 1] + maxFret);
-  if (!used.length) throw new Error('這一段沒有聽到吉他的音。');
+  const used = staff !== 'tab' ? [...notes] : lead ? leadNotes(notes) : notes.filter(n => n.pitch >= tuning[0] && n.pitch <= tuning[tuning.length - 1] + maxFret);
+  if (!used.length) throw new Error(staff === 'tab' ? '這一段沒有聽到這個樂器範圍內的音。' : '這一段沒有聽到音符。');
   // Bar 1 is the bar holding the first note (a pickup gets rests before it).
   const position = t => timeToBeat(t, beats) - rhythm.downbeat;
   const firstBar = Math.floor((position(used[0].start) + 0.125) / beatsPerBar);
   const startBeat = rhythm.downbeat + firstBar * beatsPerBar;
   const warped = warpNotes(used, rhythm, startBeat).notes;
-  const out = polyToAlphaTex(warped, { bpm, origin: 0, staff: 'tab', tuning, maxFret, title, trackName, timeSignature: beatsPerBar, lead, grid: 'mixed' });
+  const out = polyToAlphaTex(warped, { bpm, origin: 0, staff, tuning, maxFret, title, trackName, timeSignature: beatsPerBar, lead, grid: 'mixed', leadCost });
   const barCount = (out.tex.match(/\|/g) ?? []).length + 1;
   const bars = Array.from({ length: barCount }, (_, k) => offset + beatTime(startBeat + k * beatsPerBar, beats));
   return { tex: out.tex, bars, notes: used.length, bpm, dropped: out.dropped };

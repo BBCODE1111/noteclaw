@@ -181,14 +181,14 @@ export const GM_DRUM_NAMES = {
   53: 'Ride (bell)', 54: 'Tambourine (hit)', 55: 'Splash (hit)', 56: 'Cowbell medium (hit)', 57: 'Crash medium (hit)', 59: 'Ride (middle)'
 };
 
-export function polyToAlphaTex(notes, { bpm = 110, subdivision = 16, origin, staff = 'tab', tuning = OPEN_STRINGS, maxFret = 19, title = 'Recorded', trackName = 'Guitar', timeSignature = 4, timeSignatureDenominator = 4, lead = false, grid = null } = {}) {
+export function polyToAlphaTex(notes, { bpm = 110, subdivision = 16, origin, staff = 'tab', tuning = OPEN_STRINGS, maxFret = 19, title = 'Recorded', trackName = 'Guitar', timeSignature = 4, timeSignatureDenominator = 4, lead = false, grid = null, leadCost } = {}) {
   if (!notes.length) throw new Error('還沒有可以轉譜的音符。');
   // grid 'mixed': straight 16ths or 16th triplets per beat (on TICKS per beat); otherwise a plain `subdivision` grid.
   const mixed = grid === 'mixed' ? mixedGrid(notes.map(n => n.start - (origin ?? 0)), 60 / bpm) : null;
   const unit = mixed ? 60 / bpm / TICKS : 60 / bpm * (4 / subdivision);
   const chords = groupChords(notes, { origin, unit, ...(mixed ? { quantize: mixed.quantize, snapEnd: mixed.snapEnd } : {}) });
   if (!chords.length) throw new Error('預備拍結束後沒有錄到音符。');
-  const report = staff === 'tab' ? fingerChords(chords, { tuning, maxFret, lead }) : { shapes: [], dropped: 0, simplified: 0, unplayable: 0 };
+  const report = staff === 'tab' ? fingerChords(chords, { tuning, maxFret, lead, ...(leadCost ? { leadCost } : {}) }) : { shapes: [], dropped: 0, simplified: 0, unplayable: 0 };
   const barUnits = mixed ? TICKS * timeSignature * 4 / timeSignatureDenominator : Math.round(subdivision * timeSignature / timeSignatureDenominator);
   const tokens = timeSignature === 4 && timeSignatureDenominator === 4 ? [] : [`\\ts ${timeSignature} ${timeSignatureDenominator}`];
   let skipped = 0;
