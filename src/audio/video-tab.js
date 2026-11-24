@@ -5,7 +5,7 @@
 //    is followed beat by beat instead of drifting off a fixed metronome.
 // 3. Note times are re-expressed in beats ("warped"), so the existing score writer can put them on a
 //    steady grid, and every bar line gets the video time where that bar really starts (sync points).
-import { onsetEnvelope, estimateTempo, trackBeats, findDownbeat, timeToBeat, beatsTempo } from './beats.js';
+import { onsetEnvelope, estimateTempo, trackBeats, findDownbeat, timeToBeat, beatsTempo, chooseTempo } from './beats.js';
 import { polyToAlphaTex } from '../poly-score.js';
 import { OPEN_STRINGS } from '../fingering.js';
 
@@ -29,7 +29,7 @@ export function leadNotes(notes, { lowest = 40, highest = 88, span = 9, strum = 
 /** Tempo, beat times and the first downbeat of a recording. */
 export function analyseRhythm(samples, sampleRate, notes = [], { bpm, beatsPerBar = 4, tempo: tempoOptions, downbeat: downbeatWeights } = {}) {
   const envelope = onsetEnvelope(samples, sampleRate);
-  const tempo = bpm || estimateTempo(envelope.env, envelope.rate, tempoOptions);
+  const tempo = bpm || (tempoOptions?.legacy ? estimateTempo(envelope.env, envelope.rate, tempoOptions) : chooseTempo(envelope.env, envelope.rate, notes, tempoOptions));
   const beats = trackBeats(envelope.env, envelope.rate, tempo);
   const downbeat = findDownbeat(beats, envelope, notes, beatsPerBar, downbeatWeights);
   return { bpm: bpm || beatsTempo(beats, tempo), beats, downbeat, beatsPerBar };

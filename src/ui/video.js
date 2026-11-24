@@ -345,6 +345,8 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
   $('vBarHereBtn').onclick = () => downbeatHere();
   $('vDoubleBtn').onclick = () => retempo(2);
   $('vHalfBtn').onclick = () => retempo(0.5);
+  $('vUpBtn').onclick = () => retempo(1.5);
+  $('vDownBtn').onclick = () => retempo(2 / 3);
   $('vEarlierBtn').onclick = () => shiftAll(-50);
   $('vLaterBtn').onclick = () => shiftAll(50);
   $('vClearBtn').onclick = () => clearAll();

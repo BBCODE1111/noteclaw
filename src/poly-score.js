@@ -84,7 +84,10 @@ export function mixedGrid(starts, beatSeconds, { bias = 0.6 } = {}) {
  * fretted notes within a four-fret hand span. Cheapest shapes first.
  */
 /** Lead-playing preferences (tuned on transcribed solos with known fingering; see tools/bench.mjs). */
-export const LEAD_COST = { fret: 0.04, zoneLo: 5, zoneHi: 15, zone: 0.15, top: 0.3, open: 2, skip: 0, str: 0 };
+export const LEAD_COST = { fret: 0.04, zoneLo: 5, zoneHi: 15, zone: 0.15, top: 0.3, open: 2, skip: 0, str: 0,
+  // Hand window (lead): the index finger sits at an anchor fret; notes from one fret below it to `reach` above
+  // are played without moving (a pinky stretch past +3 costs `stretch`); anything outside moves the hand.
+  window: true, back: 1, reach: 3, stretch: 0.3, moveBase: 0.6, moveK: 0.6 };
 export function chordShapes(pitches, { tuning = OPEN_STRINGS, maxFret = 19, limit = 10, lead = false, leadCost = LEAD_COST } = {}) {
   const L = { ...LEAD_COST, ...leadCost };
   const options = pitches.map(p => possiblePositions(p, maxFret, tuning));
@@ -106,7 +109,7 @@ export function chordShapes(pitches, { tuning = OPEN_STRINGS, maxFret = 19, limi
         const height = used.reduce((sum, u) => sum + u.string - 1, 0) / used.length; // 0 = low E … 5 = high e
         extra = low * L.fret + zone * L.zone + top * L.top + open * L.open + skipped * L.skip + height * L.str;
       }
-      out.push({ notes: used.map((u, k) => ({ ...u, pitch: pitches[k] })), hand: low, cost: span * 0.5 + fingers * 0.1 + extra });
+      out.push({ notes: used.map((u, k) => ({ ...u, pitch: pitches[k] })), hand: low, high: fretted.length ? Math.max(...fretted) : 0, cost: span * 0.5 + fingers * 0.1 + extra });
       return;
     }
     for (const o of options[i]) {
@@ -141,10 +144,26 @@ export function fingerChords(chords, options = {}) {
     return shapes;
   });
   const costs = [];
+  const L = { ...LEAD_COST, ...(options.leadCost || {}) };
+  const W = options.lead && L.window ? L : null;
   candidates.forEach((shapes, i) => {
     costs.push(shapes.map(s => {
       if (!i || !candidates[i - 1].length) return { cost: s.cost, prev: -1, hand: s.hand };
       let best = { cost: Infinity, prev: 0, hand: s.hand };
+      if (W) {
+        candidates[i - 1].forEach((from, j) => {
+          const a = costs[i - 1][j].hand;
+          let move = 0, anchor = a;
+          if (s.hand && a) {
+            const over = s.high - (a + W.reach), under = (a - W.back) - s.hand;
+            if (over > 0 || under > 0) { const shift = Math.max(over, under); move = W.moveBase + W.moveK * shift; anchor = over > 0 ? Math.max(s.hand, s.high - W.reach) : s.hand; }
+            else if (s.high > a + 3) move = W.stretch * (s.high - a - 3);
+          } else if (s.hand) anchor = s.hand;
+          const cost = costs[i - 1][j].cost + s.cost + move;
+          if (cost < best.cost) best = { cost, prev: j, hand: anchor };
+        });
+        return best;
+      }
       candidates[i - 1].forEach((from, j) => {
         // An open-string shape leaves the hand where it was (for lead playing; chords may reset it).
         const fromHand = options.lead ? costs[i - 1][j].hand : from.hand;

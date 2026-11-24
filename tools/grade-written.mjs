@@ -29,7 +29,7 @@ for (const f of fs.readdirSync(wdir).filter(f => f.endsWith('.written.json'))) {
     return { shift, hit, exact, fing, w: w.length, f1: 2 * hit / (truth.length + w.length) };
   };
   let strict = null, fixed = null;
-  for (let s = -8; s <= 40; s++) { const r = score(s); if (s % 4 === 0 && (!strict || r.f1 > strict.f1)) strict = r; if (!fixed || r.f1 > fixed.f1) fixed = r; }
+  for (let s = -64; s <= 64; s++) { const r = score(s); if (s % 4 === 0 && (!strict || r.f1 > strict.f1)) strict = r; if (!fixed || r.f1 > fixed.f1) fixed = r; }
   n++; T += truth.length; Hs += strict.hit; Ws += strict.w; Es += strict.exact; Fs += strict.fing; Hf += fixed.hit; Ef += fixed.exact; Ff += fixed.fing; Wf += fixed.w;
   if (fixed.shift % 4 === 0) bars++;
   rows.push(`${name.slice(-6).padEnd(7)} ♩=${bpm} strict found ${strict.hit}/${truth.length} extra ${strict.w - strict.hit} exact ${strict.exact} fret ${strict.fing} | best shift ${fixed.shift - strict.shift} beat(s) → found ${fixed.hit}`);

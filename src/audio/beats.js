@@ -184,3 +184,24 @@ export function beatsTempo(beats, fallback) {
   return d.length >= 4 ? 60 / d[d.length >> 1] : fallback;
 }
 
+
+/** Share of note starts that land on the straight 16th grid of these beats (±`width` beat, soft). */
+export function gridFit(starts, beats, width = 0.045) {
+  if (beats.length < 4 || !starts.length) return 0;
+  let fit = 0;
+  for (const t of starts) { const p = timeToBeat(t, beats), q = (p * 4 - Math.round(p * 4)) / 4; fit += Math.exp(-0.5 * (q / width) ** 2); }
+  return fit / starts.length;
+}
+/**
+ * Tempo: the envelope estimate (which favours 60–130 bpm), unless 1.5× that tempo puts the notes on a straight
+ * 16th grid far better — then the estimate had taken fast 16ths for sextuplets. Swung 16ths also fit better
+ * at 1.5× (a little), so the bar is set at 30% better (on 65 recordings with known tempo: one swung lick and one fast scale still wrong; ×1.5 / ÷1.5 in the app fix them).
+ */
+export function chooseTempo(env, rate, notes, { ratio = 1.3, ...options } = {}) {
+  const base = estimateTempo(env, rate, options);
+  if (notes.length < 8) return base;
+  const starts = notes.map(n => n.start);
+  const at = bpm => gridFit(starts, trackBeats(env, rate, bpm));
+  const here = at(base), up = base * 1.5 <= (options.max ?? 200) ? at(base * 1.5) : 0;
+  return up > ratio * here ? base * 1.5 : base;
+}
