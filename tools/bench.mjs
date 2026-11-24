@@ -26,7 +26,15 @@ export function grade(name) {
   const { frames, onsets } = JSON.parse(fs.readFileSync(path.join(dir, name + '.frames.json')));
   const ev = bp.noteFramesToTime(bp.outputToNotesPoly(frames, onsets, opts.onset ?? 0.65, opts.frame ?? 0.2, opts.minLen ?? 5));
   const raw = cleanPolyNotes(ev.map(e => ({ pitch: e.pitchMidi, start: e.startTimeSeconds, end: e.startTimeSeconds + e.durationSeconds, level: e.amplitude })), opts.clean);
-  const rhythm = analyseRhythm(s, rate, raw, opts.rhythm);
+  // RHYTHM_DIR: take beats and bar lines from another copy of the audio (e.g. the full mix, when `dir` holds a
+  // separated guitar track that has lost the drums and bass).
+  const rdir = process.env.RHYTHM_DIR;
+  const rhythm = rdir ? (() => {
+    const m = readWav(path.join(rdir, name + '.wav')), f = JSON.parse(fs.readFileSync(path.join(rdir, name + '.frames.json')));
+    const e = bp.noteFramesToTime(bp.outputToNotesPoly(f.frames, f.onsets, opts.onset ?? 0.65, opts.frame ?? 0.2, opts.minLen ?? 5));
+    const mixNotes = cleanPolyNotes(e.map(x => ({ pitch: x.pitchMidi, start: x.startTimeSeconds, end: x.startTimeSeconds + x.durationSeconds, level: x.amplitude })), opts.clean);
+    return analyseRhythm(m.s, m.rate, process.env.RHYTHM_NOTES === 'own' ? raw : mixNotes, opts.rhythm);
+  })() : analyseRhythm(s, rate, raw, opts.rhythm);
   const notes = opts.noLead ? raw.filter(n => n.pitch >= 40) : leadNotes(raw, opts.lead);
   const truthPos = JSON.parse(fs.readFileSync(path.join(dir, name + '.truth.json')));
   const truth = truthPos.filter(p => !p.rest && !p.grace).flatMap(p => p.notes.filter(n => !(parseInt(n.d, 16) & 1)).map(n => ({ step: p.beat * TICKS, pitch: n.pitch, string: 7 - n.s, fret: n.f })));

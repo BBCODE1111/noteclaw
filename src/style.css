@@ -310,4 +310,5 @@ textarea { flex: 1; min-height: 260px; width: 100%; resize: vertical; background
 body.has-video #videoBtn { background: var(--accent); color: var(--on-accent); }
 .vb b { font-weight: 700; font-variant-numeric: tabular-nums; }
 .vb:disabled { opacity: .5; cursor: default; }
+.vb.sep-btn.off { opacity: .6; font-weight: 500; }
 .auto-row { padding-bottom: 6px; border-bottom: 1px dashed var(--faint); }

@@ -6,3 +6,4 @@ public/soundfont/
 takes/
 public/basic-pitch/
 .claude/
+__pycache__/

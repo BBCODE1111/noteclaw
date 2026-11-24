@@ -29,6 +29,15 @@ npm run dev
 
 在自己電腦上執行時，用 Chrome 開 <http://127.0.0.1:5173>（錄音功能需要 Chrome 才能選到音效卡）。也可以雙擊 `run.command`，第一次會自動安裝需要的套件。
 
+### 吉他分離器（選用）
+
+扒有伴奏的影片時，可以先把吉他從伴奏裡分離出來，抓到的音會多很多（測試：62% → 74%）。雙擊 `separator/啟動吉他分離器.command`：
+
+- 第一次會安裝 [Demucs](https://github.com/facebookresearch/demucs) 分離模型，約 400MB，需要網路，裝在 `~/Library/Application Support/NoteClaw/`。
+- 視窗顯示「已啟動」後，回到 NoteClaw，影片視窗的「分離吉他」會變成「開」，之後按「自動扒譜」就會先分離吉他。
+- 分離器只接受本機連線，只回應 NoteClaw 的網頁；用完關掉視窗即可。
+- 請用 Chrome。線上版第一次連到分離器時，Chrome 可能會詢問是否允許存取本機網路裝置，按「允許」。
+
 開發用指令：
 
 ```bash
@@ -48,11 +57,13 @@ node tools/analyze-wav.mjs 錄音.wav --bpm 80   # 離線分析一段錄音，�
 | `src/ui/` | 側欄、錄音頁、圖示、樂器清單 |
 | `src/fingering.js`、`src/poly-score.js` | 指法演算法、和弦指型、把音符寫成譜 |
 | `src/midi-import.js` | MIDI 匯入與調性判斷 |
+| `separator/` | 本機吉他分離器（Python + Demucs），`啟動吉他分離器.command` 啟動 |
 | `tests/` | 自動測試（`npm test`） |
 | `public/brand/` | Logo 檔案放這裡 |
 
 ## 使用的開源專案
 
+- [Demucs](https://github.com/facebookresearch/demucs)（MIT）：吉他分離器使用的音源分離模型
 - [alphaTab](https://github.com/CoderLine/alphaTab)（MPL-2.0）：譜面讀取、顯示與播放
 - [Basic Pitch](https://github.com/spotify/basic-pitch-ts)（Apache-2.0）：多音轉譜模型，透過 TensorFlow.js 在本機執行
 - [jsPDF](https://github.com/parallax/jsPDF)（MIT）：PDF 匯出

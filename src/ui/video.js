@@ -8,6 +8,7 @@
 import * as alphaTab from '@coderline/alphatab';
 import { analyseRhythm, videoScore } from '../audio/video-tab.js';
 import { timeToBeat } from '../audio/beats.js';
+import { separatorStatus, separateGuitar, SEPARATOR_RATE } from '../audio/separator.js';
 
 const AUTO = 'noteclaw-auto'; // marks the bar-1 point added automatically when the user's first point is later
 const MEDIA_EXT = /\.(mp4|m4v|mov|webm|mkv|ogv|mp3|m4a|aac|wav|ogg|oga|flac|opus)$/i;
@@ -137,6 +138,7 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
     $('videoName').textContent = file.name;
     $('videoName').title = file.name;
     panel.hidden = false;
+    checkSeparator();
     setMode(true);
     renderStatus();
     const n = api.score ? readPoints(api.score).length : 0;
@@ -239,6 +241,49 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
     return mono;
   }
   const status = text => { $('videoStatus').textContent = text; };
+
+  // ---- optional guitar separator (separator/server.py on this Mac) ----
+  const SEP_KEY = 'noteclaw.separate';
+  let sepReady = false;
+  const sepWanted = () => { try { return localStorage.getItem(SEP_KEY) !== 'off'; } catch { return true; } };
+  function renderSeparator() {
+    const b = $('vSepBtn');
+    b.classList.toggle('on', sepReady && sepWanted());
+    b.classList.toggle('off', !sepReady);
+    b.textContent = !sepReady ? '分離吉他：未啟動' : sepWanted() ? '分離吉他：開' : '分離吉他：關';
+    b.title = sepReady
+      ? '扒譜前先把吉他從伴奏裡分離出來（本機分離器），有伴奏的影片會抓到更多音。點一下切換開／關。'
+      : '本機吉他分離器沒有在執行。雙擊 NoteClaw 資料夾裡的 separator/啟動吉他分離器.command 開啟它。';
+  }
+  async function checkSeparator() {
+    sepReady = !!(await separatorStatus());
+    renderSeparator();
+    return sepReady;
+  }
+  async function toggleSeparator() {
+    if (!(await checkSeparator())) {
+      toast('吉他分離器沒有在執行：雙擊 NoteClaw 資料夾裡的「separator/啟動吉他分離器.command」，等視窗顯示「已啟動」再按一次。第一次會安裝約 400MB。');
+      return;
+    }
+    try { localStorage.setItem(SEP_KEY, sepWanted() ? 'off' : 'on'); } catch { /* private mode */ }
+    renderSeparator();
+  }
+  /** The chosen stretch as stereo at the separator's rate (the separator works best on the original sound). */
+  async function decodeStereo(from, end) {
+    const ctx = new OfflineAudioContext(2, 1, SEPARATOR_RATE);
+    const buf = await ctx.decodeAudioData(await media.file.arrayBuffer());
+    const a = Math.floor(from * SEPARATOR_RATE), b = Math.min(buf.length, Math.ceil(end * SEPARATOR_RATE));
+    const chans = [];
+    for (let c = 0; c < Math.min(2, buf.numberOfChannels); c++) chans.push(buf.getChannelData(c).slice(a, b));
+    return chans;
+  }
+  async function resample(samples, from, to) {
+    const ctx = new OfflineAudioContext(1, Math.ceil(samples.length * to / from), to);
+    const buf = ctx.createBuffer(1, samples.length, from);
+    buf.copyToChannel(samples, 0);
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
+    return (await ctx.startRendering()).getChannelData(0);
+  }
   async function autoTranscribe() {
     if (busy || !media) return;
     const end = range.to ?? (Number.isFinite(video.duration) ? video.duration : 0);
@@ -251,19 +296,31 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
       status('讀取影片的聲音…');
       const audio = await decodeAudio();
       const samples = audio.subarray(Math.floor(range.from * AUDIO_RATE), Math.min(audio.length, Math.ceil(end * AUDIO_RATE)));
+      // With the separator running, the notes are heard from the guitar alone (tools/bench.mjs: 62% → 74% of
+      // notes found on band recordings) but beats and bar lines still come from the full mix, whose drums and
+      // bass they need (from the guitar alone bar lines fall from 34 to 15 right out of 40).
+      let guitar = null;
+      if (sepWanted() && await checkSeparator()) {
+        status('把吉他從伴奏裡分離出來…（本機分離器）');
+        const t0 = performance.now();
+        const sep = await separateGuitar(await decodeStereo(range.from, end), SEPARATOR_RATE);
+        guitar = await resample(sep, SEPARATOR_RATE, AUDIO_RATE);
+        console.info(`guitar separated in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+      }
       const { transcribePoly } = await import('../audio/poly.js');
       let slow = false;
-      const notes = await transcribePoly(samples, AUDIO_RATE, {
-        model: `${import.meta.env.BASE_URL}basic-pitch/model.json`, lowest: 28, highest: 96,
-        // Tuned on band recordings with known tabs (tools/bench.mjs): fewer false notes, about as many found.
-        onsetThreshold: 0.65, frameThreshold: 0.2,
-        onProgress: f => status(`聽音符中… ${Math.round(f * 100)}%（${clock(end - range.from)} 的音訊）${slow ? '・顯示卡加速失敗，改用 CPU，會慢一點' : ''}`),
+      const listen = (input, label, thresholds) => transcribePoly(input, AUDIO_RATE, {
+        model: `${import.meta.env.BASE_URL}basic-pitch/model.json`, lowest: 28, highest: 96, ...thresholds,
+        onProgress: f => status(`${label} ${Math.round(f * 100)}%（${clock(end - range.from)} 的音訊）${slow ? '・顯示卡加速失敗，改用 CPU，會慢一點' : ''}`),
         onFallback: () => { slow = true; }
       });
+      // Tuned on band recordings with known tabs (tools/bench.mjs): fewer false notes, about as many found.
+      const mixNotes = await listen(samples, guitar ? '聽拍子和貝斯…' : '聽音符中…', { onsetThreshold: 0.65, frameThreshold: 0.2 });
+      const notes = guitar ? await listen(guitar, '聽吉他的音符…', { onsetThreshold: 0.75, frameThreshold: 0.25 }) : mixNotes;
       status('找拍子和小節線…');
       await new Promise(r => setTimeout(r, 0));
-      const rhythm = analyseRhythm(samples, AUDIO_RATE, notes);
-      auto = { samples, rate: AUDIO_RATE, offset: range.from, notes, rhythm, title: media.name.replace(/\.[^.]+$/, '') };
+      const rhythm = analyseRhythm(samples, AUDIO_RATE, mixNotes);
+      auto = { samples, rate: AUDIO_RATE, offset: range.from, notes, mixNotes, separated: !!guitar, rhythm, title: media.name.replace(/\.[^.]+$/, '') };
       buildScore(true);
     } catch (err) {
       console.error(err);
@@ -287,7 +344,7 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
     $('vAutoResult').hidden = false;
     $('vAutoInfo').textContent = `♩=${out.bpm} · ${score.masterBars.length} 小節`;
     renderStatus();
-    if (first) toast(`寫好了：${out.notes} 個音、${score.masterBars.length} 小節，每小節都已經對齊影片。這是草稿：音高是聽出來的，弦格、節奏細節和技巧請校對。小節線位置不對的話，用「← 一拍 / 一拍 →」或「這裡是第一拍」修正。`);
+    if (first) toast(`寫好了${auto.separated ? '（已分離吉他）' : ''}：${out.notes} 個音、${score.masterBars.length} 小節，每小節都已經對齊影片。這是草稿：音高是聽出來的，弦格、節奏細節和技巧請校對。小節線位置不對的話，用「← 一拍 / 一拍 →」或「這裡是第一拍」修正。`);
   }
   function shiftDownbeat(beats) { if (!auto) return; auto.rhythm.downbeat += beats; buildScore(); }
   function downbeatHere() {
@@ -299,7 +356,7 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
   }
   function retempo(factor) {
     if (!auto) return;
-    auto.rhythm = analyseRhythm(auto.samples, auto.rate, auto.notes, { bpm: auto.rhythm.bpm * factor });
+    auto.rhythm = analyseRhythm(auto.samples, auto.rate, auto.mixNotes, { bpm: auto.rhythm.bpm * factor });
     buildScore();
   }
 
@@ -340,6 +397,7 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
   $('vFromBtn').onclick = () => setRange('from');
   $('vToBtn').onclick = () => setRange('to');
   $('vAutoBtn').onclick = () => autoTranscribe();
+  $('vSepBtn').onclick = () => toggleSeparator();
   $('vBeatEarlierBtn').onclick = () => shiftDownbeat(-1);
   $('vBeatLaterBtn').onclick = () => shiftDownbeat(1);
   $('vBarHereBtn').onclick = () => downbeatHere();
