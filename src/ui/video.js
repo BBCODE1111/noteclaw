@@ -262,7 +262,8 @@ export function initVideo({ api, editor, $, toast, togglePlay }) {
   }
   async function toggleSeparator() {
     if (!(await checkSeparator())) {
-      toast('吉他分離器沒有在執行：雙擊 NoteClaw 資料夾裡的「separator/啟動吉他分離器.command」，等視窗顯示「已啟動」再按一次。第一次會安裝約 400MB。');
+      toast('連不到吉他分離器：雙擊 NoteClaw 資料夾裡的「separator/啟動吉他分離器.command」，等視窗顯示「已啟動」再按一次（第一次會安裝約 400MB）。'
+        + (location.protocol === 'https:' ? '如果它已經開著：請用 Chrome，並在網址列左邊的網站設定裡允許「本機網路存取」；或改用本機版（run.command）。' : ''));
       return;
     }
     try { localStorage.setItem(SEP_KEY, sepWanted() ? 'off' : 'on'); } catch { /* private mode */ }
